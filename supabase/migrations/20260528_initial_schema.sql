@@ -196,7 +196,7 @@ create trigger trg_on_auth_user_created
 -- ============================================================
 --  Helpers (utilisés par les policies RLS)
 -- ============================================================
-create or replace function public.current_role()
+create or replace function public.my_role()
 returns text
 language sql
 stable
@@ -275,7 +275,7 @@ create policy "profiles update admin" on public.profiles
 
 drop policy if exists "profiles delete owner" on public.profiles;
 create policy "profiles delete owner" on public.profiles
-  for delete to authenticated using (public.current_role() = 'owner' and id <> auth.uid());
+  for delete to authenticated using (public.my_role() = 'owner' and id <> auth.uid());
 
 -- ============================================================
 --  RLS — groups
