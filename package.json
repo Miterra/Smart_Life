@@ -1,0 +1,35 @@
+{
+  "name": "smart-life-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Smart Life Dashboard - PWA mobile-first de gestion d'équipe (tâches, calendrier, social, visuels) avec push iOS via Supabase + VAPID.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "gen:vapid": "node scripts/gen-vapid.cjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "date-fns": "^3.6.0",
+    "framer-motion": "^11.0.8",
+    "lucide-react": "^0.395.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.24.0",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "vite": "^5.3.1",
+    "vite-plugin-pwa": "^0.20.0",
+    "workbox-precaching": "^7.1.0",
+    "workbox-window": "^7.1.0"
+  }
+}
