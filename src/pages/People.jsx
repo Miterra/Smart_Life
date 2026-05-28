@@ -14,7 +14,6 @@ import {
 } from 'lucide-react'
 import { listProfiles, updateProfile, subscribeRealtime } from '../lib/repository'
 import { supabase } from '../lib/supabase'
-import { signUp } from '../lib/auth'
 import { ROLE_LABELS, ROLE_COLORS, ROLES, isAdminOrOwner, canChangeRole } from '../lib/roles'
 import { classNames, initialsFor, colorFor } from '../lib/utils'
 
@@ -206,20 +205,27 @@ function InviteForm({ profile, onClose }) {
     setSaving(true)
     setErr('')
     try {
-      // Crée le compte (un trigger Postgres créera le profil avec role=user).
-      // Le owner peut ensuite mettre à jour le rôle.
-      await signUp(email, password, fullName)
-      // Petit délai pour laisser le trigger Postgres tourner
-      await new Promise((r) => setTimeout(r, 600))
-      if (role !== 'user') {
-        const { data: target } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', email)
-          .maybeSingle()
-        if (target?.id) {
-          await updateProfile(target.id, { role })
-        }
+      // Appelle l'edge function admin-create-user :
+      // - crée le compte avec email DÉJÀ confirmé (pas d'email envoyé)
+      // - applique le rôle voulu directement
+      const { data: sess } = await supabase.auth.getSession()
+      const token = sess?.session?.access_token
+      if (!token) throw new Error('Session expirée. Reconnecte-toi.')
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ email, password, full_name: fullName, role }),
+        },
+      )
+      const payload = await res.json()
+      if (!res.ok || !payload.ok) {
+        throw new Error(payload.error || `HTTP ${res.status}`)
       }
       setDone({ email, password })
     } catch (e2) {
