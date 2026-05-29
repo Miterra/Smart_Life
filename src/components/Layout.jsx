@@ -12,7 +12,7 @@ import {
   History as HistoryIcon,
 } from 'lucide-react'
 import { signOut } from '../lib/auth'
-import { isAdminOrOwner, canViewFinance, ROLE_LABELS } from '../lib/roles'
+import { isAdminOrOwner, canViewPeople, isAliasAccount, ROLE_LABELS } from '../lib/roles'
 import { classNames } from '../lib/utils'
 import Avatar from './Avatar'
 
@@ -23,10 +23,11 @@ const TABS = [
   { to: '/groups', label: 'Groupes', icon: MessagesSquare },
 ]
 
-export default function Layout({ profile, children }) {
+export default function Layout({ profile, financeEnabled = false, children }) {
   const location = useLocation()
   const isAdmin = isAdminOrOwner(profile?.role)
-  const tabs = canViewFinance(profile?.role)
+  const showPeople = canViewPeople(profile?.role) || isAliasAccount(profile?.email)
+  const tabs = financeEnabled
     ? [...TABS, { to: '/finance', label: 'Finance', icon: Wallet }]
     : TABS
 
@@ -51,14 +52,14 @@ export default function Layout({ profile, children }) {
 
             <div className="flex items-center gap-2">
               {isAdmin && (
-                <>
-                  <HeaderLink to="/history" title="Historique">
-                    <HistoryIcon className="w-4 h-4" />
-                  </HeaderLink>
-                  <HeaderLink to="/people" title="Personnes">
-                    <Users className="w-4 h-4" />
-                  </HeaderLink>
-                </>
+                <HeaderLink to="/history" title="Historique">
+                  <HistoryIcon className="w-4 h-4" />
+                </HeaderLink>
+              )}
+              {showPeople && (
+                <HeaderLink to="/people" title="Personnes">
+                  <Users className="w-4 h-4" />
+                </HeaderLink>
               )}
               <HeaderLink to="/settings" title="Paramètres">
                 <SettingsIcon className="w-4 h-4" />

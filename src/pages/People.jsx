@@ -29,6 +29,9 @@ import {
   listMutes,
   muteUser,
   unmuteUser,
+  listMyAliases,
+  setAlias,
+  clearAlias,
   logActivity,
   subscribeRealtime,
 } from '../lib/repository'
@@ -37,9 +40,11 @@ import {
   ROLE_LABELS,
   ROLE_COLORS,
   ROLES,
-  isAdminOrOwner,
+  canViewPeople,
+  canCreateUsers,
   canChangeRole,
   canManageCategories,
+  isAliasAccount,
 } from '../lib/roles'
 import { classNames, initialsFor, colorFor } from '../lib/utils'
 import Avatar from '../components/Avatar'
@@ -55,6 +60,7 @@ export default function People({ profile }) {
   const [people, setPeople] = useState([])
   const [categories, setCategories] = useState([])
   const [mutedUsers, setMutedUsers] = useState(new Set())
+  const [aliasMap, setAliasMap] = useState({})
   const [showInvite, setShowInvite] = useState(false)
   const [editingCat, setEditingCat] = useState(null) // category object or 'new'
   const [membersCat, setMembersCat] = useState(null)
@@ -63,13 +69,24 @@ export default function People({ profile }) {
   const [err, setErr] = useState('')
 
   const canCats = canManageCategories(profile.role)
+  const canCreate = canCreateUsers(profile.role)
+  const canAlias = isAliasAccount(profile.email)
+  const nameOf = (p) => aliasMap[p.id] || p.full_name || p.email
 
   const refresh = async () => {
     try {
-      const [list, cats, mutes] = await Promise.all([listProfiles(), listCategories(), listMutes()])
+      const [list, cats, mutes, aliases] = await Promise.all([
+        listProfiles(),
+        listCategories(),
+        listMutes(),
+        listMyAliases(),
+      ])
       setPeople(list)
       setCategories(cats)
       setMutedUsers(new Set((mutes || []).filter((m) => m.muted_user_id).map((m) => m.muted_user_id)))
+      const am = {}
+      for (const a of aliases || []) am[a.target_id] = a.alias
+      setAliasMap(am)
     } catch (e) {
       setErr(e.message)
     } finally {
@@ -93,7 +110,7 @@ export default function People({ profile }) {
     }
   }
 
-  if (!isAdminOrOwner(profile.role)) {
+  if (!canViewPeople(profile.role) && !canAlias) {
     return <Forbidden />
   }
 
@@ -149,6 +166,18 @@ export default function People({ profile }) {
     refresh()
   }
 
+  // Alias privé (renommage visible uniquement par le compte autorisé).
+  const saveAlias = async (id, value) => {
+    const v = (value || '').trim()
+    try {
+      if (!v) await clearAlias(id)
+      else await setAlias(id, v)
+      await refresh()
+    } catch (e) {
+      alert(e.message)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -161,10 +190,12 @@ export default function People({ profile }) {
           </p>
         </div>
         {tab === 'people' ? (
-          <button onClick={() => setShowInvite(true)} className="btn-primary">
-            <Plus className="w-4 h-4" />
-            Inviter
-          </button>
+          canCreate && (
+            <button onClick={() => setShowInvite(true)} className="btn-primary">
+              <Plus className="w-4 h-4" />
+              Inviter
+            </button>
+          )
         ) : (
           canCats && (
             <button onClick={() => setEditingCat('new')} className="btn-primary">
@@ -217,6 +248,7 @@ export default function People({ profile }) {
                 key={p.id}
                 person={p}
                 me={profile}
+                name={nameOf(p)}
                 onSetRole={setRole}
                 onRemove={removeUser}
                 onOpen={() => setDetail(p)}
@@ -283,8 +315,12 @@ export default function People({ profile }) {
             person={detail}
             me={profile}
             categories={categories}
+            name={nameOf(detail)}
+            canAlias={canAlias}
+            aliasValue={aliasMap[detail.id] || ''}
             muted={mutedUsers.has(detail.id)}
             onToggleMute={() => toggleMuteUser(detail.id)}
+            onSaveAlias={(v) => saveAlias(detail.id, v)}
             onClose={() => setDetail(null)}
           />
         )}
@@ -293,7 +329,7 @@ export default function People({ profile }) {
   )
 }
 
-function PersonRow({ person, me, onSetRole, onRemove, onOpen }) {
+function PersonRow({ person, me, name, onSetRole, onRemove, onOpen }) {
   const Icon = ROLE_ICONS[person.role] || UserIcon
   const isSelf = person.id === me.id
   const canChange = canChangeRole(me.role) && !isSelf
@@ -312,7 +348,7 @@ function PersonRow({ person, me, onSetRole, onRemove, onOpen }) {
         <Avatar profile={person} size={40} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">
-            {person.full_name || person.email}
+            {name || person.full_name || person.email}
             {isSelf && <span className="text-ink-400 font-normal ml-1">(toi)</span>}
           </p>
           <p className="text-[11px] text-ink-400 truncate flex items-center gap-1">
@@ -331,7 +367,6 @@ function PersonRow({ person, me, onSetRole, onRemove, onOpen }) {
                 onChange={(e) => onSetRole(person.id, e.target.value)}
                 className="text-[10px] bg-ink-900/80 border border-white/10 rounded px-1.5 py-0.5 text-ink-200"
               >
-                {person.role !== 'owner' && <option value="owner">→ Owner</option>}
                 <option value="admin">→ Admin</option>
                 <option value="manager">→ Manager</option>
                 <option value="user">→ User</option>
@@ -353,17 +388,45 @@ function PersonRow({ person, me, onSetRole, onRemove, onOpen }) {
   )
 }
 
-function PersonDetailModal({ person, me, categories, muted, onToggleMute, onClose }) {
+function PersonDetailModal({
+  person,
+  me,
+  categories,
+  muted,
+  name,
+  canAlias,
+  aliasValue,
+  onToggleMute,
+  onSaveAlias,
+  onClose,
+}) {
   const Icon = ROLE_ICONS[person.role] || UserIcon
   const isSelf = person.id === me.id
+  const realName = person.full_name || person.email
+  const displayName = name || realName
+  const [aliasInput, setAliasInput] = useState(aliasValue || '')
+  const [savingAlias, setSavingAlias] = useState(false)
   const myCats = (categories || []).filter((c) =>
     (c.profile_categories || []).some((m) => m.user_id === person.id),
   )
+
+  const submitAlias = async (value) => {
+    setSavingAlias(true)
+    try {
+      await onSaveAlias(value)
+    } finally {
+      setSavingAlias(false)
+    }
+  }
+
   return (
     <Modal onClose={onClose}>
       <div className="flex flex-col items-center text-center pt-2">
         <Avatar profile={person} size={96} ring className="shadow-lg mb-3" />
-        <h3 className="heading text-xl text-white">{person.full_name || person.email}</h3>
+        <h3 className="heading text-xl text-white">{displayName}</h3>
+        {canAlias && aliasValue && (
+          <p className="text-[11px] text-ink-500 mt-0.5">Vrai nom : {realName}</p>
+        )}
         <p className="text-xs text-ink-400 flex items-center gap-1 mt-1">
           <Mail className="w-3 h-3" /> {person.email}
         </p>
@@ -372,6 +435,49 @@ function PersonDetailModal({ person, me, categories, muted, onToggleMute, onClos
           {ROLE_LABELS[person.role]}
         </span>
       </div>
+
+      {canAlias && (
+        <div className="mt-5">
+          <p className="text-[11px] uppercase tracking-widest text-ink-400 mb-2 flex items-center gap-1.5">
+            <Pencil className="w-3.5 h-3.5" /> Renommer (privé)
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={aliasInput}
+              onChange={(e) => setAliasInput(e.target.value)}
+              placeholder={realName}
+              className="input flex-1"
+            />
+            <button
+              type="button"
+              onClick={() => submitAlias(aliasInput)}
+              disabled={savingAlias || aliasInput.trim() === (aliasValue || '')}
+              className="btn-primary px-3"
+              title="Enregistrer"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+            {aliasValue && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAliasInput('')
+                  submitAlias('')
+                }}
+                disabled={savingAlias}
+                className="btn-ghost px-3 text-rose-300"
+                title="Réinitialiser"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] text-ink-500 mt-1.5">
+            Visible uniquement par toi. Ne modifie pas le vrai nom du membre.
+          </p>
+        </div>
+      )}
 
       <div className="mt-5">
         <p className="text-[11px] uppercase tracking-widest text-ink-400 mb-2 flex items-center gap-1.5">

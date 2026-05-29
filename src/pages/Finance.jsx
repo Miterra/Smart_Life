@@ -10,6 +10,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Lock,
+  Tags,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -24,8 +25,14 @@ import {
 } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { listFinances, createFinance, deleteFinance, subscribeRealtime } from '../lib/repository'
-import { canViewFinance } from '../lib/roles'
+import {
+  listFinances,
+  createFinance,
+  deleteFinance,
+  listCategories,
+  subscribeRealtime,
+} from '../lib/repository'
+import { canAccessFinance, isOwner } from '../lib/roles'
 import { classNames } from '../lib/utils'
 
 function eur(n) {
@@ -36,15 +43,27 @@ function eur(n) {
   })
 }
 
-export default function Finance({ profile }) {
+export default function Finance({ profile, myCategoryCount = 0 }) {
+  const owner = isOwner(profile.role)
   const [rows, setRows] = useState([])
+  const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
 
+  const catMap = useMemo(() => {
+    const m = {}
+    for (const c of categories) m[c.id] = c
+    return m
+  }, [categories])
+
   const refresh = async () => {
     try {
-      const data = await listFinances()
+      const [data, cats] = await Promise.all([
+        listFinances(),
+        listCategories().catch(() => []),
+      ])
       setRows(data.map((r) => ({ ...r, amount: Number(r.amount) })))
+      setCategories(cats || [])
     } catch (e) {
       console.error(e)
     } finally {
@@ -67,6 +86,25 @@ export default function Finance({ profile }) {
     }
     return { inSum, outSum, net: inSum - outSum }
   }, [rows])
+
+  // Comparaison par catégorie : combien rapporte chaque catégorie.
+  const byCategory = useMemo(() => {
+    const map = {}
+    for (const r of rows) {
+      const key = r.category_id || '__none__'
+      if (!map[key]) map[key] = { id: r.category_id || null, in: 0, out: 0 }
+      if (r.direction === 'in') map[key].in += r.amount
+      else map[key].out += r.amount
+    }
+    return Object.values(map)
+      .map((c) => ({
+        ...c,
+        net: c.in - c.out,
+        name: c.id ? catMap[c.id]?.name || 'Catégorie' : 'Sans catégorie',
+        color: c.id ? catMap[c.id]?.color : null,
+      }))
+      .sort((a, b) => b.in - a.in || b.net - a.net)
+  }, [rows, catMap])
 
   const monthly = useMemo(() => {
     const map = {}
@@ -101,11 +139,15 @@ export default function Finance({ profile }) {
     }))
   }, [rows])
 
-  if (!canViewFinance(profile.role)) {
+  if (!canAccessFinance(profile.role, myCategoryCount)) {
     return (
       <div className="card p-8 text-center">
         <Lock className="w-10 h-10 text-ink-400 mx-auto mb-3" />
-        <p className="text-sm text-ink-300">Réservé au propriétaire.</p>
+        <p className="text-sm text-ink-300">
+          {profile.role === 'admin'
+            ? "Aucune catégorie ne t'est assignée pour le moment."
+            : 'Réservé au propriétaire.'}
+        </p>
       </div>
     )
   }
@@ -115,12 +157,16 @@ export default function Finance({ profile }) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="heading text-2xl">Finances</h1>
-          <p className="text-xs text-ink-400 mt-1">Visible uniquement par toi.</p>
+          <p className="text-xs text-ink-400 mt-1">
+            {owner ? 'Visible uniquement par toi.' : 'Finances de tes catégories · lecture seule.'}
+          </p>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary">
-          <Plus className="w-4 h-4" />
-          Ajouter
-        </button>
+        {owner && (
+          <button onClick={() => setShowForm(true)} className="btn-primary">
+            <Plus className="w-4 h-4" />
+            Ajouter
+          </button>
+        )}
       </div>
 
       {/* Stat cards */}
@@ -135,13 +181,53 @@ export default function Finance({ profile }) {
       ) : rows.length === 0 ? (
         <div className="card p-8 text-center">
           <Wallet className="w-10 h-10 text-ink-500 mx-auto mb-3" />
-          <p className="text-sm text-ink-300 mb-3">Aucune opération enregistrée.</p>
-          <button onClick={() => setShowForm(true)} className="btn-secondary">
-            <Plus className="w-4 h-4" /> Ajouter la première
-          </button>
+          <p className="text-sm text-ink-300 mb-3">
+            {owner ? 'Aucune opération enregistrée.' : 'Aucune opération dans tes catégories.'}
+          </p>
+          {owner && (
+            <button onClick={() => setShowForm(true)} className="btn-secondary">
+              <Plus className="w-4 h-4" /> Ajouter la première
+            </button>
+          )}
         </div>
       ) : (
         <>
+          {/* Comparaison par catégorie */}
+          {byCategory.length > 0 && (
+            <div className="card p-4">
+              <p className="text-[10px] uppercase tracking-widest text-ink-400 mb-3 flex items-center gap-1.5">
+                <Tags className="w-3.5 h-3.5" /> Par catégorie
+              </p>
+              <ul className="space-y-2.5">
+                {byCategory.map((c) => (
+                  <li key={c.id || '__none__'} className="flex items-center gap-3">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{ background: c.color || '#64748b' }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white truncate">{c.name}</p>
+                      <p className="text-[11px] text-ink-400">
+                        <span className="text-emerald-300">+{eur(c.in)}</span>
+                        {' · '}
+                        <span className="text-rose-300">−{eur(c.out)}</span>
+                      </p>
+                    </div>
+                    <span
+                      className={classNames(
+                        'font-semibold text-sm flex-shrink-0',
+                        c.net >= 0 ? 'text-neon-cyan' : 'text-rose-300',
+                      )}
+                    >
+                      {c.net >= 0 ? '+' : ''}
+                      {eur(c.net)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Bar chart : entrées vs sorties par mois */}
           <div className="card p-4">
             <p className="text-[10px] uppercase tracking-widest text-ink-400 mb-3">
@@ -204,7 +290,13 @@ export default function Finance({ profile }) {
             </p>
             <ul className="space-y-2">
               {[...rows].reverse().slice(0, 30).map((r) => (
-                <FinanceRow key={r.id} row={r} onChange={refresh} />
+                <FinanceRow
+                  key={r.id}
+                  row={r}
+                  canDelete={owner}
+                  catName={r.category_id ? catMap[r.category_id]?.name : r.category}
+                  onChange={refresh}
+                />
               ))}
             </ul>
           </div>
@@ -212,9 +304,10 @@ export default function Finance({ profile }) {
       )}
 
       <AnimatePresence>
-        {showForm && (
+        {showForm && owner && (
           <FinanceForm
             profile={profile}
+            categories={categories}
             onClose={() => setShowForm(false)}
             onSaved={() => {
               setShowForm(false)
@@ -247,7 +340,7 @@ function StatCard({ label, value, icon: Icon, tone, signed }) {
   )
 }
 
-function FinanceRow({ row, onChange }) {
+function FinanceRow({ row, canDelete, catName, onChange }) {
   const isIn = row.direction === 'in'
   const remove = async () => {
     if (!confirm('Supprimer cette opération ?')) return
@@ -272,25 +365,27 @@ function FinanceRow({ row, onChange }) {
         <p className="text-sm font-medium text-white truncate">{row.label}</p>
         <p className="text-[11px] text-ink-400">
           {format(parseISO(row.occurred_on), 'd MMM yyyy', { locale: fr })}
-          {row.category ? ` · ${row.category}` : ''}
+          {catName ? ` · ${catName}` : ''}
         </p>
       </div>
       <span className={classNames('font-semibold text-sm', isIn ? 'text-emerald-300' : 'text-rose-300')}>
         {isIn ? '+' : '−'}
         {eur(row.amount)}
       </span>
-      <button onClick={remove} className="text-ink-400 hover:text-rose-400 p-1">
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
+      {canDelete && (
+        <button onClick={remove} className="text-ink-400 hover:text-rose-400 p-1">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
     </li>
   )
 }
 
-function FinanceForm({ profile, onClose, onSaved }) {
+function FinanceForm({ profile, categories, onClose, onSaved }) {
   const [label, setLabel] = useState('')
   const [amount, setAmount] = useState('')
   const [direction, setDirection] = useState('in')
-  const [category, setCategory] = useState('')
+  const [categoryId, setCategoryId] = useState('')
   const [occurredOn, setOccurredOn] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -305,11 +400,13 @@ function FinanceForm({ profile, onClose, onSaved }) {
     setSaving(true)
     setErr('')
     try {
+      const cat = categories.find((c) => c.id === categoryId)
       await createFinance({
         label,
         amount: amt,
         direction,
-        category,
+        category_id: categoryId || null,
+        category: cat ? cat.name : null,
         occurred_on: occurredOn,
         created_by: profile.id,
       })
@@ -409,13 +506,34 @@ function FinanceForm({ profile, onClose, onSaved }) {
               />
             </label>
           </div>
-          <input
-            type="text"
-            placeholder="Catégorie (optionnel)"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="input"
-          />
+          <label className="block">
+            <span className="text-[10px] uppercase tracking-widest text-ink-400 mb-1 block">
+              Catégorie
+            </span>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className="input"
+            >
+              <option value="">— Sans catégorie —</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {categories.length === 0 ? (
+            <p className="text-[10px] text-amber-300/80">
+              Aucune catégorie. Crée-en dans Personnes → Catégories pour comparer tes revenus et
+              partager la vue avec l'admin concerné.
+            </p>
+          ) : (
+            <p className="text-[10px] text-ink-500">
+              La catégorie permet de comparer tes revenus. L'admin d'une catégorie ne voit que les
+              opérations de celle-ci ; « Sans catégorie » reste visible par toi seul.
+            </p>
+          )}
         </div>
 
         {err && <p className="text-xs text-rose-300 mt-3">{err}</p>}

@@ -10,6 +10,7 @@ import {
   User as UserIcon,
   Camera,
   Loader2,
+  Tag,
 } from 'lucide-react'
 import {
   enableNotifications,
@@ -20,7 +21,7 @@ import {
   isStandalone,
   showLocalNotification,
 } from '../lib/notifications'
-import { updateProfile, uploadAvatar } from '../lib/repository'
+import { updateProfile, uploadAvatar, getMyCategories } from '../lib/repository'
 import { signOut } from '../lib/auth'
 import { ROLE_LABELS } from '../lib/roles'
 import { classNames } from '../lib/utils'
@@ -35,10 +36,21 @@ export default function Settings({ profile }) {
   const [savingProf, setSavingProf] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url || null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [myCats, setMyCats] = useState([])
   const fileRef = useRef(null)
 
   useEffect(() => {
     setPerm(getPermissionStatus())
+  }, [])
+
+  useEffect(() => {
+    let alive = true
+    getMyCategories()
+      .then((c) => alive && setMyCats(c))
+      .catch(() => alive && setMyCats([]))
+    return () => {
+      alive = false
+    }
   }, [])
 
   const onPickAvatar = async (e) => {
@@ -205,6 +217,30 @@ export default function Settings({ profile }) {
           <button onClick={saveProfile} className="btn-primary w-full" disabled={savingProf}>
             {savingProf ? '…' : 'Enregistrer'}
           </button>
+        </div>
+      </Section>
+
+      <Section title="Mes catégories" icon={Tag}>
+        <div className="card p-4">
+          {myCats.length === 0 ? (
+            <p className="text-sm text-ink-500">Aucune catégorie ne t'est attribuée.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {myCats.map((c) => {
+                const color = c.color || '#22d3ee'
+                return (
+                  <span
+                    key={c.id}
+                    className="chip border text-xs"
+                    style={{ background: color + '22', color, borderColor: color + '55' }}
+                  >
+                    <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+                    {c.name}
+                  </span>
+                )
+              })}
+            </div>
+          )}
         </div>
       </Section>
 

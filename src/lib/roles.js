@@ -19,6 +19,17 @@ export const ROLES = {
   USER: 'user',
 }
 
+/**
+ * Compte autorisé, à titre exceptionnel, à renommer les membres dans l'onglet
+ * Personnes. Ces alias sont PRIVÉS (visibles uniquement par ce compte) et ne
+ * modifient jamais le vrai nom.
+ */
+export const ALIAS_EMAIL = 'anesa.elezovic@icloud.com'
+
+/** Vrai pour le compte autorisé aux alias privés (insensible à la casse). */
+export const isAliasAccount = (email) =>
+  !!email && email.trim().toLowerCase() === ALIAS_EMAIL
+
 export const ROLE_LABELS = {
   owner: 'Propriétaire',
   admin: 'Administrateur',
@@ -55,8 +66,15 @@ export const canManageCategories = (role) => isAdminOrOwner(role)
 // Groupes (création / membres / renommer / supprimer) : owner + admin
 export const canManageGroups = (role) => isAdminOrOwner(role)
 
-// Finances : owner uniquement
+// Finances : owner toujours. Admin uniquement s'il appartient à ≥1 catégorie
+// (il ne verra alors QUE les finances de ses catégories, en lecture seule).
 export const canViewFinance = (role) => role === ROLES.OWNER
+export const canAccessFinance = (role, myCategoryCount = 0) =>
+  isOwner(role) || (role === ROLES.ADMIN && myCategoryCount > 0)
+
+// Onglet Personnes : tout le monde sauf les utilisateurs simples.
+// Les managers y ont accès en lecture seule (pas de gestion des rôles/catégories).
+export const canViewPeople = (role) => role !== ROLES.USER
 
 // Assigner à n'importe qui : owner + admin
 export const canAssignAnyone = (role) => isAdminOrOwner(role)

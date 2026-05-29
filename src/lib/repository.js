@@ -170,6 +170,69 @@ export async function setCategoryMembers(categoryId, userIds) {
   if (error) throw error
 }
 
+/** IDs des catégories auxquelles appartient l'utilisateur courant. */
+export async function listMyCategoryIds() {
+  const uid = await _myId()
+  if (!uid) return []
+  const { data, error } = await supabase
+    .from('profile_categories')
+    .select('category_id')
+    .eq('user_id', uid)
+  if (error) throw error
+  return (data || []).map((r) => r.category_id)
+}
+
+/** Catégories (objet complet) auxquelles appartient l'utilisateur courant. */
+export async function getMyCategories() {
+  const uid = await _myId()
+  if (!uid) return []
+  const { data, error } = await supabase
+    .from('profile_categories')
+    .select('categories(*)')
+    .eq('user_id', uid)
+  if (error) throw error
+  return (data || []).map((r) => r.categories).filter(Boolean)
+}
+
+/* ============================================================
+ *  Alias privés (renommage de membres, visible uniquement par soi)
+ *  RLS : owner_id = auth.uid() — personne d'autre ne peut lire/écrire.
+ * ============================================================ */
+export async function listMyAliases() {
+  const uid = await _myId()
+  if (!uid) return []
+  const { data, error } = await supabase
+    .from('member_aliases')
+    .select('target_id, alias')
+    .eq('owner_id', uid)
+  if (error) throw error
+  return data || []
+}
+
+export async function setAlias(targetId, alias) {
+  const uid = await _myId()
+  const { data, error } = await supabase
+    .from('member_aliases')
+    .upsert(
+      { owner_id: uid, target_id: targetId, alias, updated_at: new Date().toISOString() },
+      { onConflict: 'owner_id,target_id' },
+    )
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function clearAlias(targetId) {
+  const uid = await _myId()
+  const { error } = await supabase
+    .from('member_aliases')
+    .delete()
+    .eq('owner_id', uid)
+    .eq('target_id', targetId)
+  if (error) throw error
+}
+
 /* ---------- Groups (visibilité + chat) ---------- */
 export async function listGroups() {
   const { data, error } = await supabase
@@ -387,7 +450,11 @@ export async function deletePeriod(id) {
   logActivity('period.delete', 'a supprimé une période', { entity_type: 'period', entity_id: id })
 }
 
-/* ---------- Finances (owner uniquement) ---------- */
+/* ---------- Finances ----------
+ * Écriture : owner uniquement (RLS).
+ * Lecture  : owner = tout ; admin = uniquement les lignes de SES catégories
+ *            (RLS « finances admin scoped select » via category_id).
+ * Le payload peut inclure category_id (uuid) et category (nom, pour l'affichage). */
 export async function listFinances() {
   const { data, error } = await supabase
     .from('finances')

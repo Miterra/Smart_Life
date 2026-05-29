@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from './lib/auth'
 import { isSupabaseConfigured } from './lib/supabase'
 import Layout from './components/Layout'
@@ -13,12 +13,13 @@ import Groups from './pages/Groups'
 import Settings from './pages/Settings'
 import History from './pages/History'
 import Splash from './components/Splash'
-import { canViewFinance, isAdminOrOwner } from './lib/roles'
-import { setCurrentActor } from './lib/repository'
+import { canAccessFinance, canViewPeople, isAdminOrOwner, isAliasAccount } from './lib/roles'
+import { setCurrentActor, listMyCategoryIds } from './lib/repository'
 
 export default function App() {
   const { session, profile, loading } = useAuth()
   const location = useLocation()
+  const [myCategoryIds, setMyCategoryIds] = useState([])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -26,6 +27,21 @@ export default function App() {
 
   useEffect(() => {
     setCurrentActor(profile)
+  }, [profile])
+
+  // Catégories de l'utilisateur courant → décide l'accès Finance des admins.
+  useEffect(() => {
+    let alive = true
+    if (!profile) {
+      setMyCategoryIds([])
+      return
+    }
+    listMyCategoryIds()
+      .then((ids) => alive && setMyCategoryIds(ids))
+      .catch(() => alive && setMyCategoryIds([]))
+    return () => {
+      alive = false
+    }
   }, [profile])
 
   if (!isSupabaseConfigured) {
@@ -49,8 +65,11 @@ export default function App() {
 
   if (!profile) return <Splash label="Création du profil…" />
 
+  const myCategoryCount = myCategoryIds.length
+  const financeEnabled = canAccessFinance(profile.role, myCategoryCount)
+
   return (
-    <Layout profile={profile}>
+    <Layout profile={profile} financeEnabled={financeEnabled}>
       <Routes>
         <Route path="/" element={<Dashboard profile={profile} />} />
         <Route path="/tasks" element={<Tasks profile={profile} />} />
@@ -58,9 +77,24 @@ export default function App() {
         <Route path="/groups" element={<Groups profile={profile} />} />
         <Route
           path="/finance"
-          element={canViewFinance(profile.role) ? <Finance profile={profile} /> : <Navigate to="/" replace />}
+          element={
+            financeEnabled ? (
+              <Finance profile={profile} myCategoryCount={myCategoryCount} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
         />
-        <Route path="/people" element={<People profile={profile} />} />
+        <Route
+          path="/people"
+          element={
+            canViewPeople(profile.role) || isAliasAccount(profile.email) ? (
+              <People profile={profile} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
         <Route
           path="/history"
           element={isAdminOrOwner(profile.role) ? <History profile={profile} /> : <Navigate to="/" replace />}
