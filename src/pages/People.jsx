@@ -14,6 +14,9 @@ import {
   Tag,
   Pencil,
   Check,
+  ChevronRight,
+  Bell,
+  BellOff,
 } from 'lucide-react'
 import {
   listProfiles,
@@ -23,6 +26,10 @@ import {
   updateCategory,
   deleteCategory,
   setCategoryMembers,
+  listMutes,
+  muteUser,
+  unmuteUser,
+  logActivity,
   subscribeRealtime,
 } from '../lib/repository'
 import { supabase } from '../lib/supabase'
@@ -35,6 +42,7 @@ import {
   canManageCategories,
 } from '../lib/roles'
 import { classNames, initialsFor, colorFor } from '../lib/utils'
+import Avatar from '../components/Avatar'
 
 const ROLE_ICONS = { owner: Crown, admin: Shield, manager: UserCog, user: UserIcon }
 const CAT_COLORS = [
@@ -46,9 +54,11 @@ export default function People({ profile }) {
   const [tab, setTab] = useState('people')
   const [people, setPeople] = useState([])
   const [categories, setCategories] = useState([])
+  const [mutedUsers, setMutedUsers] = useState(new Set())
   const [showInvite, setShowInvite] = useState(false)
   const [editingCat, setEditingCat] = useState(null) // category object or 'new'
   const [membersCat, setMembersCat] = useState(null)
+  const [detail, setDetail] = useState(null) // person being viewed
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
 
@@ -56,9 +66,10 @@ export default function People({ profile }) {
 
   const refresh = async () => {
     try {
-      const [list, cats] = await Promise.all([listProfiles(), listCategories()])
+      const [list, cats, mutes] = await Promise.all([listProfiles(), listCategories(), listMutes()])
       setPeople(list)
       setCategories(cats)
+      setMutedUsers(new Set((mutes || []).filter((m) => m.muted_user_id).map((m) => m.muted_user_id)))
     } catch (e) {
       setErr(e.message)
     } finally {
@@ -68,9 +79,19 @@ export default function People({ profile }) {
 
   useEffect(() => {
     refresh()
-    const sub = subscribeRealtime(['profiles', 'categories', 'profile_categories'], refresh)
+    const sub = subscribeRealtime(['profiles', 'categories', 'profile_categories', 'mutes'], refresh)
     return () => sub.unsubscribe()
   }, [])
+
+  const toggleMuteUser = async (id) => {
+    try {
+      if (mutedUsers.has(id)) await unmuteUser(id)
+      else await muteUser(id)
+      refresh()
+    } catch (e) {
+      alert(e.message)
+    }
+  }
 
   if (!isAdminOrOwner(profile.role)) {
     return <Forbidden />
@@ -82,7 +103,13 @@ export default function People({ profile }) {
       return
     }
     try {
+      const target = people.find((p) => p.id === id)
       await updateProfile(id, { role })
+      logActivity(
+        'role.change',
+        `a changé le rôle de ${target?.full_name || target?.email || 'un membre'} en ${ROLE_LABELS[role]}`,
+        { entity_type: 'role', entity_id: id, meta: { role } },
+      )
       refresh()
     } catch (e) {
       alert(e.message)
@@ -92,8 +119,14 @@ export default function People({ profile }) {
   const removeUser = async (id) => {
     if (!confirm('Retirer cet utilisateur ? Ses tâches deviendront non-assignées.')) return
     try {
+      const target = people.find((p) => p.id === id)
       const { error } = await supabase.from('profiles').delete().eq('id', id)
       if (error) throw error
+      logActivity('member.delete', `a supprimé le membre ${target?.full_name || target?.email || ''}`.trim(), {
+        entity_type: 'member',
+        entity_id: id,
+      })
+      if (detail?.id === id) setDetail(null)
       refresh()
     } catch (e) {
       alert(e.message)
@@ -186,6 +219,7 @@ export default function People({ profile }) {
                 me={profile}
                 onSetRole={setRole}
                 onRemove={removeUser}
+                onOpen={() => setDetail(p)}
               />
             ))}
           </AnimatePresence>
@@ -244,12 +278,22 @@ export default function People({ profile }) {
             }}
           />
         )}
+        {detail && (
+          <PersonDetailModal
+            person={detail}
+            me={profile}
+            categories={categories}
+            muted={mutedUsers.has(detail.id)}
+            onToggleMute={() => toggleMuteUser(detail.id)}
+            onClose={() => setDetail(null)}
+          />
+        )}
       </AnimatePresence>
     </div>
   )
 }
 
-function PersonRow({ person, me, onSetRole, onRemove }) {
+function PersonRow({ person, me, onSetRole, onRemove, onOpen }) {
   const Icon = ROLE_ICONS[person.role] || UserIcon
   const isSelf = person.id === me.id
   const canChange = canChangeRole(me.role) && !isSelf
@@ -260,15 +304,12 @@ function PersonRow({ person, me, onSetRole, onRemove }) {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
-      className="card p-3"
+      whileTap={{ scale: 0.99 }}
+      className="card p-3 cursor-pointer hover:bg-white/[0.04] transition"
+      onClick={onOpen}
     >
       <div className="flex items-center gap-3">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-ink-950 flex-shrink-0"
-          style={{ background: person.avatar_color || colorFor(person.id) }}
-        >
-          {initialsFor(person.full_name || person.email)}
-        </div>
+        <Avatar profile={person} size={40} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">
             {person.full_name || person.email}
@@ -278,7 +319,7 @@ function PersonRow({ person, me, onSetRole, onRemove }) {
             <Mail className="w-3 h-3" /> {person.email}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
           <span className={classNames('chip border', ROLE_COLORS[person.role])}>
             <Icon className="w-3 h-3" />
             {ROLE_LABELS[person.role]}
@@ -304,10 +345,72 @@ function PersonRow({ person, me, onSetRole, onRemove }) {
                 <Trash2 className="w-3 h-3" />
               </button>
             )}
+            {!canChange && !canDelete && <ChevronRight className="w-4 h-4 text-ink-500" />}
           </div>
         </div>
       </div>
     </motion.li>
+  )
+}
+
+function PersonDetailModal({ person, me, categories, muted, onToggleMute, onClose }) {
+  const Icon = ROLE_ICONS[person.role] || UserIcon
+  const isSelf = person.id === me.id
+  const myCats = (categories || []).filter((c) =>
+    (c.profile_categories || []).some((m) => m.user_id === person.id),
+  )
+  return (
+    <Modal onClose={onClose}>
+      <div className="flex flex-col items-center text-center pt-2">
+        <Avatar profile={person} size={96} ring className="shadow-lg mb-3" />
+        <h3 className="heading text-xl text-white">{person.full_name || person.email}</h3>
+        <p className="text-xs text-ink-400 flex items-center gap-1 mt-1">
+          <Mail className="w-3 h-3" /> {person.email}
+        </p>
+        <span className={classNames('chip border mt-2.5', ROLE_COLORS[person.role])}>
+          <Icon className="w-3 h-3" />
+          {ROLE_LABELS[person.role]}
+        </span>
+      </div>
+
+      <div className="mt-5">
+        <p className="text-[11px] uppercase tracking-widest text-ink-400 mb-2 flex items-center gap-1.5">
+          <Tag className="w-3.5 h-3.5" /> Catégories attribuées
+        </p>
+        {myCats.length === 0 ? (
+          <p className="text-sm text-ink-500">Aucune catégorie.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {myCats.map((c) => {
+              const color = c.color || '#22d3ee'
+              return (
+                <span
+                  key={c.id}
+                  className="chip border text-xs"
+                  style={{ background: color + '22', color, borderColor: color + '55' }}
+                >
+                  <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+                  {c.name}
+                </span>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {!isSelf && (
+        <button
+          onClick={onToggleMute}
+          className={classNames(
+            'btn-secondary w-full mt-5',
+            muted && 'text-neon-amber',
+          )}
+        >
+          {muted ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+          {muted ? 'Réactiver les notifications' : 'Muet (ne plus être notifié)'}
+        </button>
+      )}
+    </Modal>
   )
 }
 
@@ -533,6 +636,11 @@ function InviteForm({ profile, onClose }) {
       if (!res.ok || !payload.ok) {
         throw new Error(payload.error || `HTTP ${res.status}`)
       }
+      logActivity(
+        'member.create',
+        `a créé le compte de ${fullName || email} (${ROLE_LABELS[payload.user?.role || role] || role})`,
+        { entity_type: 'member', entity_id: payload.user?.id || null },
+      )
       setDone({ email, password })
     } catch (e2) {
       setErr(e2.message)

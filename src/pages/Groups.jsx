@@ -12,6 +12,8 @@ import {
   Send,
   Pencil,
   AlertCircle,
+  Bell,
+  BellOff,
 } from 'lucide-react'
 import {
   listGroups,
@@ -22,10 +24,14 @@ import {
   listProfiles,
   listMessages,
   sendMessage,
+  listMutes,
+  muteGroup,
+  unmuteGroup,
   subscribeRealtime,
 } from '../lib/repository'
 import { canManageGroups } from '../lib/roles'
-import { classNames, initialsFor, colorFor } from '../lib/utils'
+import { classNames, colorFor } from '../lib/utils'
+import Avatar from '../components/Avatar'
 import { format, isToday, isYesterday } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
@@ -37,14 +43,16 @@ export default function Groups({ profile }) {
   const [showAdd, setShowAdd] = useState(false)
   const [managing, setManaging] = useState(null)
   const [renaming, setRenaming] = useState(null)
+  const [mutedGroups, setMutedGroups] = useState(new Set())
 
   const canManage = canManageGroups(profile.role)
 
   const refresh = async () => {
     try {
-      const [g, p] = await Promise.all([listGroups(), listProfiles()])
+      const [g, p, mutes] = await Promise.all([listGroups(), listProfiles(), listMutes()])
       setGroups(g)
       setProfiles(p)
+      setMutedGroups(new Set((mutes || []).filter((m) => m.group_id).map((m) => m.group_id)))
     } catch (e) {
       console.error(e)
     } finally {
@@ -54,9 +62,19 @@ export default function Groups({ profile }) {
 
   useEffect(() => {
     refresh()
-    const sub = subscribeRealtime(['groups', 'group_members'], refresh)
+    const sub = subscribeRealtime(['groups', 'group_members', 'mutes'], refresh)
     return () => sub.unsubscribe()
   }, [])
+
+  const toggleMute = async (id) => {
+    try {
+      if (mutedGroups.has(id)) await unmuteGroup(id)
+      else await muteGroup(id)
+      refresh()
+    } catch (e) {
+      alert(e.message)
+    }
+  }
 
   const profileMap = useMemo(() => {
     const m = {}
@@ -90,6 +108,8 @@ export default function Groups({ profile }) {
           profile={profile}
           profileMap={profileMap}
           canManage={canManage}
+          muted={mutedGroups.has(selected.id)}
+          onToggleMute={() => toggleMute(selected.id)}
           onBack={() => setSelectedId(null)}
           onMembers={() => setManaging(selected)}
           onRename={() => setRenaming(selected)}
@@ -101,6 +121,7 @@ export default function Groups({ profile }) {
           profiles={profiles}
           loading={loading}
           canManage={canManage}
+          mutedGroups={mutedGroups}
           onOpen={(g) => setSelectedId(g.id)}
           onAdd={() => setShowAdd(true)}
         />
@@ -143,7 +164,7 @@ export default function Groups({ profile }) {
 }
 
 /* ============================ Liste des groupes ============================ */
-function ListView({ groups, profiles, loading, canManage, onOpen, onAdd }) {
+function ListView({ groups, profiles, loading, canManage, mutedGroups, onOpen, onAdd }) {
   return (
     <>
       <div className="flex items-center justify-between">
@@ -182,7 +203,13 @@ function ListView({ groups, profiles, loading, canManage, onOpen, onAdd }) {
       ) : (
         <ul className="space-y-2">
           {groups.map((g) => (
-            <GroupRow key={g.id} group={g} profiles={profiles} onOpen={() => onOpen(g)} />
+            <GroupRow
+              key={g.id}
+              group={g}
+              profiles={profiles}
+              muted={mutedGroups?.has(g.id)}
+              onOpen={() => onOpen(g)}
+            />
           ))}
         </ul>
       )}
@@ -190,7 +217,7 @@ function ListView({ groups, profiles, loading, canManage, onOpen, onAdd }) {
   )
 }
 
-function GroupRow({ group, profiles, onOpen }) {
+function GroupRow({ group, profiles, muted, onOpen }) {
   const memberIds = (group.group_members || []).map((m) => m.user_id)
   const members = profiles.filter((p) => memberIds.includes(p.id))
   return (
@@ -204,21 +231,22 @@ function GroupRow({ group, profiles, onOpen }) {
             <MessagesSquare className="w-4 h-4 text-neon-magenta" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{group.name}</p>
+            <p className="text-sm font-semibold text-white truncate flex items-center gap-1.5">
+              {group.name}
+              {muted && <BellOff className="w-3 h-3 text-amber-400 flex-shrink-0" />}
+            </p>
             <p className="text-[11px] text-ink-400 flex items-center gap-1">
               <Users className="w-3 h-3" /> {members.length}{' '}
               {members.length > 1 ? 'membres' : 'membre'}
             </p>
             <div className="flex -space-x-1.5 mt-1.5">
               {members.slice(0, 6).map((m) => (
-                <div
+                <Avatar
                   key={m.id}
-                  title={m.full_name || m.email}
-                  className="w-5 h-5 rounded-full border border-ink-900 text-[8px] font-bold flex items-center justify-center text-ink-950"
-                  style={{ background: m.avatar_color || colorFor(m.id) }}
-                >
-                  {initialsFor(m.full_name || m.email)}
-                </div>
+                  profile={m}
+                  size={20}
+                  className="border border-ink-900 text-[8px]"
+                />
               ))}
               {members.length > 6 && (
                 <div className="w-5 h-5 rounded-full bg-white/10 border border-ink-900 text-[8px] font-bold flex items-center justify-center text-white">
@@ -235,7 +263,7 @@ function GroupRow({ group, profiles, onOpen }) {
 }
 
 /* ============================ Vue chat ============================ */
-function ChatView({ group, profile, profileMap, canManage, onBack, onMembers, onRename, onDelete }) {
+function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, onBack, onMembers, onRename, onDelete }) {
   const [messages, setMessages] = useState([])
   const [body, setBody] = useState('')
   const [loading, setLoading] = useState(true)
@@ -301,23 +329,33 @@ function ChatView({ group, profile, profileMap, canManage, onBack, onMembers, on
             <Users className="w-3 h-3" /> {memberCount} {memberCount > 1 ? 'membres' : 'membre'}
           </p>
         </div>
-        {canManage && (
-          <div className="flex items-center gap-0.5">
-            <button onClick={onMembers} className="btn-ghost p-2" title="Membres">
-              <Users className="w-4 h-4" />
-            </button>
-            <button onClick={onRename} className="btn-ghost p-2" title="Renommer">
-              <Pencil className="w-4 h-4" />
-            </button>
-            <button
-              onClick={onDelete}
-              className="text-ink-400 hover:text-rose-400 p-2"
-              title="Supprimer"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-0.5">
+          <motion.button
+            onClick={onToggleMute}
+            whileTap={{ scale: 0.85 }}
+            className={classNames('btn-ghost p-2', muted && 'text-amber-400')}
+            title={muted ? 'Réactiver les notifications' : 'Mettre en sourdine'}
+          >
+            {muted ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+          </motion.button>
+          {canManage && (
+            <>
+              <button onClick={onMembers} className="btn-ghost p-2" title="Membres">
+                <Users className="w-4 h-4" />
+              </button>
+              <button onClick={onRename} className="btn-ghost p-2" title="Renommer">
+                <Pencil className="w-4 h-4" />
+              </button>
+              <button
+                onClick={onDelete}
+                className="text-ink-400 hover:text-rose-400 p-2"
+                title="Supprimer"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div
@@ -529,12 +567,7 @@ function MemberToggle({ person, on, onToggle }) {
           on ? 'bg-neon-cyan/15 ring-1 ring-neon-cyan/40' : 'hover:bg-white/5',
         )}
       >
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-ink-950 flex-shrink-0"
-          style={{ background: person.avatar_color || colorFor(person.id) }}
-        >
-          {initialsFor(person.full_name || person.email)}
-        </div>
+        <Avatar profile={person} size={32} />
         <div className="flex-1 min-w-0 text-left">
           <p className="text-sm font-medium text-white truncate">
             {person.full_name || person.email}

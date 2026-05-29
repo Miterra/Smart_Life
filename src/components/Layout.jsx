@@ -1,4 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard,
   CheckSquare,
@@ -8,11 +9,12 @@ import {
   Settings as SettingsIcon,
   LogOut,
   Users,
+  History as HistoryIcon,
 } from 'lucide-react'
 import { signOut } from '../lib/auth'
-import { initialsFor } from '../lib/utils'
 import { isAdminOrOwner, canViewFinance, ROLE_LABELS } from '../lib/roles'
 import { classNames } from '../lib/utils'
+import Avatar from './Avatar'
 
 const TABS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -49,28 +51,18 @@ export default function Layout({ profile, children }) {
 
             <div className="flex items-center gap-2">
               {isAdmin && (
-                <NavLink
-                  to="/people"
-                  className={({ isActive }) =>
-                    classNames(
-                      'btn-ghost px-2.5 py-2',
-                      isActive && 'text-neon-cyan bg-white/5',
-                    )
-                  }
-                  title="Personnes"
-                >
-                  <Users className="w-4 h-4" />
-                </NavLink>
+                <>
+                  <HeaderLink to="/history" title="Historique">
+                    <HistoryIcon className="w-4 h-4" />
+                  </HeaderLink>
+                  <HeaderLink to="/people" title="Personnes">
+                    <Users className="w-4 h-4" />
+                  </HeaderLink>
+                </>
               )}
-              <NavLink
-                to="/settings"
-                className={({ isActive }) =>
-                  classNames('btn-ghost px-2.5 py-2', isActive && 'text-neon-cyan bg-white/5')
-                }
-                title="Paramètres"
-              >
+              <HeaderLink to="/settings" title="Paramètres">
                 <SettingsIcon className="w-4 h-4" />
-              </NavLink>
+              </HeaderLink>
               <UserChip profile={profile} />
             </div>
           </div>
@@ -79,8 +71,18 @@ export default function Layout({ profile, children }) {
 
       {/* Content */}
       <main className="flex-1">
-        <div key={location.pathname} className="max-w-3xl mx-auto px-4 py-4 animate-[fadeIn_.25s_ease-out]">
-          {children}
+        <div className="max-w-3xl mx-auto px-4 py-4">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </main>
 
@@ -96,22 +98,52 @@ export default function Layout({ profile, children }) {
                   to={t.to}
                   end={t.to === '/'}
                   className={({ isActive }) =>
-                    classNames('nav-tab', isActive && 'nav-tab-active')
+                    classNames('nav-tab relative', isActive && 'nav-tab-active')
                   }
                 >
-                  <Icon className="w-5 h-5" strokeWidth={2.2} />
-                  <span>{t.label}</span>
+                  {({ isActive }) => (
+                    <>
+                      {isActive && (
+                        <motion.span
+                          layoutId="navActiveBar"
+                          className="absolute -top-px inset-x-4 h-0.5 rounded-full bg-neon-cyan shadow-[0_0_8px_rgba(34,211,238,0.8)]"
+                          transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+                        />
+                      )}
+                      <motion.span
+                        className="flex flex-col items-center gap-0.5"
+                        whileTap={{ scale: 0.82 }}
+                        animate={{ scale: isActive ? 1.05 : 1 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+                      >
+                        <Icon className="w-5 h-5" strokeWidth={2.2} />
+                        <span>{t.label}</span>
+                      </motion.span>
+                    </>
+                  )}
                 </NavLink>
               )
             })}
           </div>
         </div>
       </nav>
-
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
-      `}</style>
     </div>
+  )
+}
+
+function HeaderLink({ to, title, children }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        classNames('btn-ghost px-2.5 py-2', isActive && 'text-neon-cyan bg-white/5')
+      }
+      title={title}
+    >
+      <motion.span className="flex" whileTap={{ scale: 0.85 }}>
+        {children}
+      </motion.span>
+    </NavLink>
   )
 }
 
@@ -119,19 +151,15 @@ function UserChip({ profile }) {
   const role = profile?.role || 'user'
   return (
     <div className="flex items-center gap-2">
-      <div
-        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-ink-950"
-        style={{ background: profile?.avatar_color || '#22d3ee' }}
-      >
-        {initialsFor(profile?.full_name || profile?.email || '')}
-      </div>
-      <button
+      <Avatar profile={profile} size={32} />
+      <motion.button
         onClick={signOut}
+        whileTap={{ scale: 0.85 }}
         className="btn-ghost px-2 py-1.5"
         title={`Déconnexion (${ROLE_LABELS[role]})`}
       >
         <LogOut className="w-4 h-4" />
-      </button>
+      </motion.button>
     </div>
   )
 }

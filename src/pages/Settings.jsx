@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
 import {
   Bell,
   BellOff,
@@ -9,6 +8,8 @@ import {
   Sparkles,
   LogOut,
   User as UserIcon,
+  Camera,
+  Loader2,
 } from 'lucide-react'
 import {
   enableNotifications,
@@ -19,10 +20,11 @@ import {
   isStandalone,
   showLocalNotification,
 } from '../lib/notifications'
-import { updateProfile } from '../lib/repository'
+import { updateProfile, uploadAvatar } from '../lib/repository'
 import { signOut } from '../lib/auth'
 import { ROLE_LABELS } from '../lib/roles'
-import { classNames, initialsFor } from '../lib/utils'
+import { classNames } from '../lib/utils'
+import Avatar from '../components/Avatar'
 
 export default function Settings({ profile }) {
   const [perm, setPerm] = useState('default')
@@ -31,10 +33,39 @@ export default function Settings({ profile }) {
   const [fullName, setFullName] = useState(profile.full_name || '')
   const [pushPref, setPushPref] = useState(profile.push_enabled !== false)
   const [savingProf, setSavingProf] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url || null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const fileRef = useRef(null)
 
   useEffect(() => {
     setPerm(getPermissionStatus())
   }, [])
+
+  const onPickAvatar = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setMsg({ type: 'error', text: 'Choisis un fichier image.' })
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setMsg({ type: 'error', text: 'Image trop lourde (max 5 Mo).' })
+      return
+    }
+    setUploadingAvatar(true)
+    setMsg(null)
+    try {
+      const url = await uploadAvatar(file, profile.id)
+      await updateProfile(profile.id, { avatar_url: url })
+      setAvatarUrl(url)
+      setMsg({ type: 'success', text: 'Photo de profil mise à jour.' })
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message || "Échec de l'upload." })
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
 
   const activate = async () => {
     setBusy(true)
@@ -116,12 +147,29 @@ export default function Settings({ profile }) {
       <Section title="Profil" icon={UserIcon}>
         <div className="card p-4 space-y-3">
           <div className="flex items-center gap-3">
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold text-ink-950"
-              style={{ background: profile.avatar_color || '#22d3ee' }}
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="relative flex-shrink-0 rounded-full"
+              title="Changer la photo de profil"
             >
-              {initialsFor(profile.full_name || profile.email)}
-            </div>
+              <Avatar profile={{ ...profile, avatar_url: avatarUrl }} size={56} ring />
+              <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-neon-cyan text-ink-950 flex items-center justify-center border-2 border-ink-950">
+                {uploadingAvatar ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Camera className="w-3 h-3" />
+                )}
+              </span>
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              onChange={onPickAvatar}
+              className="hidden"
+            />
             <div className="flex-1 min-w-0">
               <p className="text-[10px] uppercase tracking-widest text-ink-400">
                 {ROLE_LABELS[profile.role]}

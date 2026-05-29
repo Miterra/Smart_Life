@@ -11,8 +11,10 @@ import Finance from './pages/Finance'
 import People from './pages/People'
 import Groups from './pages/Groups'
 import Settings from './pages/Settings'
+import History from './pages/History'
 import Splash from './components/Splash'
-import { canViewFinance } from './lib/roles'
+import { canViewFinance, isAdminOrOwner } from './lib/roles'
+import { setCurrentActor } from './lib/repository'
 
 export default function App() {
   const { session, profile, loading } = useAuth()
@@ -21,6 +23,10 @@ export default function App() {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [location.pathname])
+
+  useEffect(() => {
+    setCurrentActor(profile)
+  }, [profile])
 
   if (!isSupabaseConfigured) {
     return (
@@ -55,6 +61,10 @@ export default function App() {
           element={canViewFinance(profile.role) ? <Finance profile={profile} /> : <Navigate to="/" replace />}
         />
         <Route path="/people" element={<People profile={profile} />} />
+        <Route
+          path="/history"
+          element={isAdminOrOwner(profile.role) ? <History profile={profile} /> : <Navigate to="/" replace />}
+        />
         <Route path="/settings" element={<Settings profile={profile} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
