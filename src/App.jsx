@@ -7,12 +7,12 @@ import AuthGate from './pages/Auth'
 import Dashboard from './pages/Dashboard'
 import Tasks from './pages/Tasks'
 import Calendar from './pages/Calendar'
-import Social from './pages/Social'
-import Visuals from './pages/Visuals'
+import Finance from './pages/Finance'
 import People from './pages/People'
 import Groups from './pages/Groups'
 import Settings from './pages/Settings'
 import Splash from './components/Splash'
+import { canViewFinance } from './lib/roles'
 
 export default function App() {
   const { session, profile, loading } = useAuth()
@@ -49,10 +49,12 @@ export default function App() {
         <Route path="/" element={<Dashboard profile={profile} />} />
         <Route path="/tasks" element={<Tasks profile={profile} />} />
         <Route path="/calendar" element={<Calendar profile={profile} />} />
-        <Route path="/social" element={<Social />} />
-        <Route path="/visuals" element={<Visuals profile={profile} />} />
-        <Route path="/people" element={<People profile={profile} />} />
         <Route path="/groups" element={<Groups profile={profile} />} />
+        <Route
+          path="/finance"
+          element={canViewFinance(profile.role) ? <Finance profile={profile} /> : <Navigate to="/" replace />}
+        />
+        <Route path="/people" element={<People profile={profile} />} />
         <Route path="/settings" element={<Settings profile={profile} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

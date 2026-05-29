@@ -54,7 +54,7 @@ Deno.serve(async (req: Request) => {
       .select('role')
       .eq('id', userData.user.id)
       .single()
-    if (!caller || !['owner', 'admin', 'manager'].includes(caller.role)) {
+    if (!caller || !['owner', 'admin'].includes(caller.role)) {
       return json({ error: 'forbidden' }, 403)
     }
 
@@ -63,12 +63,8 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'email and password required' }, 400)
     }
 
-    // Un manager ne peut créer que des "user"
-    let targetRole = body.role || 'user'
-    if (caller.role === 'manager' && targetRole !== 'user') {
-      targetRole = 'user'
-    }
     // Seul le owner peut créer un autre admin / owner
+    let targetRole = body.role || 'user'
     if (caller.role === 'admin' && (targetRole === 'admin' || targetRole === 'owner')) {
       targetRole = 'manager'
     }

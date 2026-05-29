@@ -1,13 +1,15 @@
 /* ============================================================
  *  Helpers rôles
  *  - owner   : propriétaire de l'instance (un seul). Gère utilisateurs,
- *              groupes, rôles, et qui voit quoi.
- *  - admin   : voit et édite tout (sauf rôle owner).
- *  - manager : crée des tâches, peut créer des comptes "user" et les
- *              assigner. Voit ses propres tâches + celles des users de
- *              ses groupes.
- *  - user    : voit uniquement les tâches qui lui sont assignées et
- *              peut changer leur statut (todo -> in_progress -> done).
+ *              groupes, rôles, catégories, périodes et finances. Voit
+ *              et supprime tout.
+ *  - admin   : voit et édite tout (sauf passer quelqu'un owner). Crée
+ *              tâches, RDV et périodes, supprime les tâches/RDV de tous.
+ *  - manager : crée UNIQUEMENT des tâches et des RDV. Voit ses tâches +
+ *              celles des groupes dont il fait partie.
+ *  - user    : ne crée rien. Voit les tâches/RDV qui lui sont assignés et
+ *              peut changer leur statut. Peut discuter dans le chat des
+ *              groupes dont il est membre.
  * ============================================================ */
 
 export const ROLES = {
@@ -31,18 +33,38 @@ export const ROLE_COLORS = {
   user: 'bg-white/10 text-ink-300 border-white/15',
 }
 
-export const canManageUsers = (role) => role === ROLES.OWNER || role === ROLES.ADMIN
-export const canCreateUsers = (role) => role === ROLES.OWNER || role === ROLES.ADMIN || role === ROLES.MANAGER
-export const canCreateTasks = (role) => role !== ROLES.USER
-export const canAssignAnyone = (role) => role === ROLES.OWNER || role === ROLES.ADMIN
-export const canManageGroups = (role) => role === ROLES.OWNER || role === ROLES.ADMIN
-export const canChangeRole = (role) => role === ROLES.OWNER
+/* ---------- Capacités par rôle ---------- */
 export const isOwner = (role) => role === ROLES.OWNER
 export const isAdminOrOwner = (role) => role === ROLES.OWNER || role === ROLES.ADMIN
 
+// Gestion des utilisateurs / rôles : owner + admin
+export const canManageUsers = (role) => isAdminOrOwner(role)
+export const canCreateUsers = (role) => isAdminOrOwner(role)
+export const canChangeRole = (role) => role === ROLES.OWNER
+
+// Tâches & RDV : owner + admin + manager
+export const canCreateTasks = (role) => role !== ROLES.USER
+export const canCreateAppointments = (role) => role !== ROLES.USER
+
+// Périodes (voyage, vacances…) : owner + admin seulement
+export const canCreatePeriods = (role) => isAdminOrOwner(role)
+
+// Catégories de personnes : owner + admin
+export const canManageCategories = (role) => isAdminOrOwner(role)
+
+// Groupes (création / membres / renommer / supprimer) : owner + admin
+export const canManageGroups = (role) => isAdminOrOwner(role)
+
+// Finances : owner uniquement
+export const canViewFinance = (role) => role === ROLES.OWNER
+
+// Assigner à n'importe qui : owner + admin
+export const canAssignAnyone = (role) => isAdminOrOwner(role)
+
+/* ---------- Tâches ---------- */
 /** Un user ne peut éditer une tâche que si elle lui est assignée, et seulement le statut. */
 export const canEditTaskFull = (role, task, userId) => {
-  if (role === ROLES.OWNER || role === ROLES.ADMIN) return true
+  if (isAdminOrOwner(role)) return true
   if (role === ROLES.MANAGER && task?.created_by === userId) return true
   return false
 }
@@ -53,6 +75,14 @@ export const canChangeTaskStatus = (role, task, userId) => {
 }
 
 export const canDeleteTask = (role, task, userId) => {
-  if (role === ROLES.OWNER || role === ROLES.ADMIN) return true
+  if (isAdminOrOwner(role)) return true
   return role === ROLES.MANAGER && task?.created_by === userId
 }
+
+/* ---------- Rendez-vous ---------- */
+export const canEditAppointment = (role, appt, userId) => {
+  if (isAdminOrOwner(role)) return true
+  return appt?.created_by === userId
+}
+
+export const canDeleteAppointment = (role, appt, userId) => canEditAppointment(role, appt, userId)

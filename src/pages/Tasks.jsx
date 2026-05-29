@@ -22,6 +22,7 @@ import {
   deleteTask,
   listProfiles,
   listGroups,
+  listCategories,
   subscribeRealtime,
 } from '../lib/repository'
 import { fmtShort, classNames, PRIORITY, STATUS, initialsFor, colorFor } from '../lib/utils'
@@ -46,6 +47,7 @@ export default function Tasks({ profile }) {
   const [tasks, setTasks] = useState([])
   const [profiles, setProfiles] = useState([])
   const [groups, setGroups] = useState([])
+  const [categories, setCategories] = useState([])
   const [filter, setFilter] = useState('mine')
   const [editing, setEditing] = useState(null)
   const [showForm, setShowForm] = useState(false)
@@ -55,10 +57,16 @@ export default function Tasks({ profile }) {
 
   const refresh = async () => {
     try {
-      const [t, p, g] = await Promise.all([listTasks(), listProfiles(), listGroups()])
+      const [t, p, g, c] = await Promise.all([
+        listTasks(),
+        listProfiles(),
+        listGroups(),
+        listCategories(),
+      ])
       setTasks(t)
       setProfiles(p)
       setGroups(g)
+      setCategories(c)
     } catch (e) {
       console.error(e)
     } finally {
@@ -68,7 +76,7 @@ export default function Tasks({ profile }) {
 
   useEffect(() => {
     refresh()
-    const sub = subscribeRealtime(['tasks', 'profiles', 'groups'], refresh)
+    const sub = subscribeRealtime(['tasks', 'profiles', 'groups', 'categories', 'profile_categories'], refresh)
     return () => sub.unsubscribe()
   }, [])
 
@@ -181,6 +189,7 @@ export default function Tasks({ profile }) {
             profile={profile}
             profiles={profiles}
             groups={groups}
+            categories={categories}
             onCancel={() => {
               setShowForm(false)
               setEditing(null)
@@ -316,7 +325,7 @@ function TaskRow({ task, profile, profiles, onEdit, onChange }) {
   )
 }
 
-function TaskForm({ initial, profile, profiles, groups, onCancel, onSave }) {
+function TaskForm({ initial, profile, profiles, groups, categories = [], onCancel, onSave }) {
   const [title, setTitle] = useState(initial?.title || '')
   const [description, setDescription] = useState(initial?.description || '')
   const [dueAt, setDueAt] = useState(initial?.due_at ? toLocal(initial.due_at) : '')
@@ -324,16 +333,32 @@ function TaskForm({ initial, profile, profiles, groups, onCancel, onSave }) {
   const [status, setStatus] = useState(initial?.status || 'todo')
   const [assignedTo, setAssignedTo] = useState(initial?.assigned_to || profile.id)
   const [groupId, setGroupId] = useState(initial?.group_id || '')
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [saving, setSaving] = useState(false)
 
   // Manager : ne peut assigner qu'à lui-même ou aux users
-  const assignablePeople = useMemo(() => {
+  const basePeople = useMemo(() => {
     if (canAssignAnyone(profile.role)) return profiles
     if (profile.role === ROLES.MANAGER) {
       return profiles.filter((p) => p.id === profile.id || p.role === ROLES.USER)
     }
     return profiles.filter((p) => p.id === profile.id)
   }, [profiles, profile])
+
+  // Filtre par catégorie de personnes
+  const assignablePeople = useMemo(() => {
+    if (!categoryFilter) return basePeople
+    const cat = categories.find((c) => c.id === categoryFilter)
+    const ids = new Set((cat?.profile_categories || []).map((m) => m.user_id))
+    return basePeople.filter((p) => ids.has(p.id))
+  }, [basePeople, categoryFilter, categories])
+
+  // Si l'assigné courant n'est plus dans la liste filtrée, on réinitialise
+  useEffect(() => {
+    if (assignedTo && !assignablePeople.some((p) => p.id === assignedTo)) {
+      setAssignedTo('')
+    }
+  }, [assignablePeople]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (e) => {
     e.preventDefault()
@@ -421,6 +446,25 @@ function TaskForm({ initial, profile, profiles, groups, onCancel, onSave }) {
               </select>
             </label>
           </div>
+          {categories.length > 0 && (
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-widest text-ink-400 mb-1 block">
+                Filtrer par catégorie
+              </span>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="input"
+              >
+                <option value="">Toutes les personnes</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-[10px] uppercase tracking-widest text-ink-400 mb-1 block">

@@ -3,30 +3,30 @@ import {
   LayoutDashboard,
   CheckSquare,
   Calendar as CalendarIcon,
-  TrendingUp,
-  Sparkles,
+  MessagesSquare,
+  Wallet,
   Settings as SettingsIcon,
   LogOut,
   Users,
-  Layers,
 } from 'lucide-react'
 import { signOut } from '../lib/auth'
 import { initialsFor } from '../lib/utils'
-import { canManageUsers, isAdminOrOwner, ROLE_LABELS, ROLE_COLORS } from '../lib/roles'
+import { isAdminOrOwner, canViewFinance, ROLE_LABELS } from '../lib/roles'
 import { classNames } from '../lib/utils'
 
 const TABS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/tasks', label: 'Tâches', icon: CheckSquare },
   { to: '/calendar', label: 'Agenda', icon: CalendarIcon },
-  { to: '/social', label: 'Social', icon: TrendingUp },
-  { to: '/visuals', label: 'Visuels', icon: Sparkles },
+  { to: '/groups', label: 'Groupes', icon: MessagesSquare },
 ]
 
 export default function Layout({ profile, children }) {
   const location = useLocation()
-  const canAdmin = canManageUsers(profile?.role)
   const isAdmin = isAdminOrOwner(profile?.role)
+  const tabs = canViewFinance(profile?.role)
+    ? [...TABS, { to: '/finance', label: 'Finance', icon: Wallet }]
+    : TABS
 
   return (
     <div className="min-h-screen flex flex-col pb-24">
@@ -36,10 +36,8 @@ export default function Layout({ profile, children }) {
           <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
             <Link to="/" className="flex items-center gap-2.5">
               <div className="relative">
-                <div className="absolute inset-0 bg-neon-cyan/40 blur-md rounded-lg" />
-                <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-neon-cyan to-neon-magenta flex items-center justify-center font-display font-bold text-ink-950">
-                  S
-                </div>
+                <div className="absolute inset-0 bg-neon-magenta/40 blur-md rounded-xl" />
+                <img src="/icon.svg" alt="Smart Life" className="relative w-9 h-9 rounded-xl" />
               </div>
               <div>
                 <div className="heading text-sm font-bold leading-tight">Smart Life</div>
@@ -62,17 +60,6 @@ export default function Layout({ profile, children }) {
                   title="Personnes"
                 >
                   <Users className="w-4 h-4" />
-                </NavLink>
-              )}
-              {canAdmin && (
-                <NavLink
-                  to="/groups"
-                  className={({ isActive }) =>
-                    classNames('btn-ghost px-2.5 py-2', isActive && 'text-neon-cyan bg-white/5')
-                  }
-                  title="Groupes"
-                >
-                  <Layers className="w-4 h-4" />
                 </NavLink>
               )}
               <NavLink
@@ -101,7 +88,7 @@ export default function Layout({ profile, children }) {
       <nav className="fixed bottom-0 inset-x-0 z-30 pb-safe">
         <div className="glass-strong border-t border-white/5">
           <div className="max-w-3xl mx-auto px-2 flex">
-            {TABS.map((t) => {
+            {tabs.map((t) => {
               const Icon = t.icon
               return (
                 <NavLink

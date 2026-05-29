@@ -22,7 +22,7 @@ export default defineConfig({
       manifest: {
         name: 'Smart Life Dashboard',
         short_name: 'Smart Life',
-        description: 'Dashboard mobile-first pour gérer tâches, calendrier, social et visuels.',
+        description: 'Dashboard mobile-first pour gérer tâches, rendez-vous, groupes et finances.',
         theme_color: '#0b0f1a',
         background_color: '#05070d',
         display: 'standalone',

@@ -5,45 +5,40 @@ import {
   Clock,
   Flame,
   Sparkles,
-  TrendingUp,
-  TrendingDown,
   Bell,
   AlertTriangle,
+  CalendarClock,
+  MapPin,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { listInsights, listSocialHistory, listTasks, subscribeRealtime } from '../lib/repository'
+import { listInsights, listTasks, listAppointments, subscribeRealtime } from '../lib/repository'
 import { fmtShort, classNames, PRIORITY, STATUS } from '../lib/utils'
-import { ROLES } from '../lib/roles'
 import { isStandalone, isIos, getPermissionStatus } from '../lib/notifications'
 
 export default function Dashboard({ profile }) {
   const [tasks, setTasks] = useState([])
   const [insights, setInsights] = useState([])
-  const [social, setSocial] = useState([])
+  const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let alive = true
-    Promise.all([listTasks(), listInsights(8), listSocialHistory(30)])
-      .then(([t, i, s]) => {
-        if (!alive) return
-        setTasks(t)
-        setInsights(i)
-        setSocial(s)
-        setLoading(false)
-      })
-      .catch((e) => {
-        console.error(e)
-        if (alive) setLoading(false)
-      })
-
-    const sub = subscribeRealtime(['tasks', 'insights', 'social_history'], async () => {
-      const [t, i, s] = await Promise.all([listTasks(), listInsights(8), listSocialHistory(30)])
+    const load = async () => {
+      const [t, i, a] = await Promise.all([listTasks(), listInsights(8), listAppointments()])
       if (!alive) return
       setTasks(t)
       setInsights(i)
-      setSocial(s)
+      setAppointments(a)
+      setLoading(false)
+    }
+    load().catch((e) => {
+      console.error(e)
+      if (alive) setLoading(false)
     })
+
+    const sub = subscribeRealtime(['tasks', 'insights', 'appointments'], () =>
+      load().catch(console.error),
+    )
     return () => {
       alive = false
       sub.unsubscribe()
@@ -60,9 +55,14 @@ export default function Dashboard({ profile }) {
     [tasks, profile.id],
   )
 
-  const productivityScore = useMemo(() => computeScore(tasks), [tasks])
+  const upcomingRdv = useMemo(() => {
+    const now = Date.now()
+    return appointments
+      .filter((a) => new Date(a.start_at).getTime() >= now - 3600000)
+      .slice(0, 4)
+  }, [appointments])
 
-  const lastSocial = useMemo(() => computeSocialDelta(social), [social])
+  const productivityScore = useMemo(() => computeScore(tasks), [tasks])
 
   return (
     <div className="space-y-4">
@@ -74,8 +74,6 @@ export default function Dashboard({ profile }) {
         <ProductivityCard score={productivityScore} />
         <StatsCard tasks={tasks} myTasks={myTasks} />
       </div>
-
-      <SocialSnapshot lastSocial={lastSocial} />
 
       <Section
         title="Mes tâches aujourd'hui"
@@ -93,6 +91,28 @@ export default function Dashboard({ profile }) {
           <div className="space-y-2">
             {todayTasks.slice(0, 5).map((t) => (
               <MiniTask key={t.id} task={t} />
+            ))}
+          </div>
+        )}
+      </Section>
+
+      <Section
+        title="Prochains RDV"
+        icon={CalendarClock}
+        action={
+          <Link to="/calendar" className="text-xs text-neon-cyan font-semibold">
+            Agenda →
+          </Link>
+        }
+      >
+        {loading ? (
+          <SkeletonList />
+        ) : upcomingRdv.length === 0 ? (
+          <Empty label="Aucun rendez-vous à venir." />
+        ) : (
+          <div className="space-y-2">
+            {upcomingRdv.map((a) => (
+              <MiniRdv key={a.id} rdv={a} />
             ))}
           </div>
         )}
@@ -158,7 +178,7 @@ function PushBanner() {
           <p className="text-xs text-ink-300 leading-snug">
             {iosNeedsInstall
               ? "Safari → Partager → Sur l'écran d'accueil. Tu pourras ensuite recevoir les rappels."
-              : 'Pour recevoir les rappels de tâches et les alertes IA.'}
+              : 'Pour recevoir les rappels de tâches et de RDV.'}
           </p>
           {!iosNeedsInstall && (
             <Link
@@ -237,56 +257,7 @@ function Stat({ icon: Icon, label, value }) {
   )
 }
 
-function SocialSnapshot({ lastSocial }) {
-  if (lastSocial.length === 0) {
-    return (
-      <Section title="Réseaux sociaux" icon={TrendingUp}>
-        <Empty label="Aucune donnée. Ajoute un handle dans Paramètres." />
-      </Section>
-    )
-  }
-  return (
-    <Section
-      title="Réseaux sociaux"
-      icon={TrendingUp}
-      action={
-        <Link to="/social" className="text-xs text-neon-cyan font-semibold">
-          Détails →
-        </Link>
-      }
-    >
-      <div className="grid grid-cols-2 gap-3">
-        {lastSocial.map((s) => {
-          const up = s.delta >= 0
-          return (
-            <div key={s.platform} className="card p-3.5">
-              <p className="text-[10px] uppercase tracking-widest text-ink-400 mb-1">
-                {s.platform}
-              </p>
-              <p className="font-display font-bold text-xl text-white mb-1.5">
-                {s.followers.toLocaleString('fr-FR')}
-              </p>
-              <div
-                className={classNames(
-                  'flex items-center gap-1 text-xs font-semibold',
-                  up ? 'text-emerald-300' : 'text-rose-300',
-                )}
-              >
-                {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {up ? '+' : ''}
-                {s.delta}
-                <span className="text-ink-400 font-normal ml-1">vs hier</span>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </Section>
-  )
-}
-
 function MiniTask({ task }) {
-  const prio = PRIORITY[task.priority] || PRIORITY.important
   const stat = STATUS[task.status] || STATUS.todo
   return (
     <Link
@@ -299,6 +270,28 @@ function MiniTask({ task }) {
         <p className="text-xs text-ink-400">{fmtShort(task.due_at)}</p>
       </div>
       <span className={classNames('chip border', stat.cls)}>{stat.label}</span>
+    </Link>
+  )
+}
+
+function MiniRdv({ rdv }) {
+  return (
+    <Link
+      to="/calendar"
+      className="flex items-center gap-3 p-3 rounded-xl bg-ink-800/40 hover:bg-ink-800/70 transition"
+    >
+      <div className="w-1 self-stretch rounded-full bg-neon-magenta" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-white truncate">{rdv.title}</p>
+        <p className="text-xs text-ink-400 flex items-center gap-2">
+          <span>{fmtShort(rdv.start_at)}</span>
+          {rdv.location && (
+            <span className="flex items-center gap-0.5 truncate">
+              <MapPin className="w-3 h-3" /> {rdv.location}
+            </span>
+          )}
+        </p>
+      </div>
     </Link>
   )
 }
@@ -379,22 +372,4 @@ function computeScore(tasks) {
   ).length
   const base = (done / recent.length) * 100
   return Math.max(0, Math.min(100, Math.round(base - overdue * 8)))
-}
-
-function computeSocialDelta(social) {
-  const byPlatform = {}
-  for (const row of social) {
-    if (!byPlatform[row.platform]) byPlatform[row.platform] = []
-    byPlatform[row.platform].push(row)
-  }
-  const out = []
-  for (const platform of Object.keys(byPlatform)) {
-    const rows = byPlatform[platform].sort((a, b) => a.captured_on.localeCompare(b.captured_on))
-    const last = rows[rows.length - 1]
-    const prev = rows[rows.length - 2]
-    if (!last) continue
-    const delta = prev ? last.followers - prev.followers : 0
-    out.push({ platform, followers: last.followers, delta })
-  }
-  return out
 }

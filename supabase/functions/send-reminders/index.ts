@@ -255,6 +255,7 @@ Deno.serve(async (req: Request) => {
       ok: true,
       now: now.toISOString(),
       tasks: { matched: 0, sent: 0, failed: 0 } as Record<string, unknown>,
+      appointments: { matched: 0, sent: 0, failed: 0 } as Record<string, unknown>,
       insights: { matched: 0, sent: 0, failed: 0 } as Record<string, unknown>,
     }
 
@@ -297,6 +298,53 @@ Deno.serve(async (req: Request) => {
       ;(out.tasks as Record<string, number>).failed += res.failed
       if (debugMode) (out.tasks as Record<string, unknown>).details = res.details
       await supabase.from('tasks').update({ reminder_sent: true }).eq('id', t.id)
+    }
+
+    /* ----- Rendez-vous : rappel J-1 ----- */
+    const { data: appts } = await supabase
+      .from('appointments')
+      .select('id, title, description, location, start_at, assigned_to, created_by')
+      .eq('reminder_sent', false)
+      .not('start_at', 'is', null)
+      .gte('start_at', j1Start)
+      .lte('start_at', j1End)
+
+    ;(out.appointments as Record<string, number>).matched = (appts || []).length
+
+    for (const a of appts || []) {
+      const targets = new Set<string>()
+      if (a.assigned_to) targets.add(a.assigned_to)
+      if (a.created_by) targets.add(a.created_by)
+      const subs = await fetchSubsForUsers([...targets])
+      if (subs.length === 0) {
+        await supabase.from('appointments').update({ reminder_sent: true }).eq('id', a.id)
+        continue
+      }
+
+      const start = new Date(a.start_at)
+      const startLabel = start.toLocaleString('fr-FR', {
+        weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+        timeZone: 'Europe/Paris',
+      })
+      const extra = a.location
+        ? `${startLabel} · ${a.location}`
+        : a.description
+          ? `${startLabel} · ${a.description}`
+          : `Demain ${startLabel}`
+      const payload = JSON.stringify({
+        notification: {
+          title: `📅 RDV — ${a.title}`,
+          body: extra,
+          icon: '/icon.svg',
+          tag: `appt-${a.id}`,
+        },
+        data: { url: '/calendar', id: a.id },
+      })
+      const res = await pushToSubs(subs, payload)
+      ;(out.appointments as Record<string, number>).sent += res.sent
+      ;(out.appointments as Record<string, number>).failed += res.failed
+      if (debugMode) (out.appointments as Record<string, unknown>).details = res.details
+      await supabase.from('appointments').update({ reminder_sent: true }).eq('id', a.id)
     }
 
     /* ----- Insights récents (warning/danger) ----- */

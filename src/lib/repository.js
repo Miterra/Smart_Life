@@ -25,7 +25,55 @@ export async function updateProfile(id, patch) {
   return data
 }
 
-/* ---------- Groups (visibility) ---------- */
+/* ---------- Catégories de personnes ---------- */
+export async function listCategories() {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*, profile_categories(user_id)')
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createCategory(name, color) {
+  const { data, error } = await supabase
+    .from('categories')
+    .insert({ name, color })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateCategory(id, patch) {
+  const { data, error } = await supabase
+    .from('categories')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteCategory(id) {
+  const { error } = await supabase.from('categories').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function setCategoryMembers(categoryId, userIds) {
+  const { error: delErr } = await supabase
+    .from('profile_categories')
+    .delete()
+    .eq('category_id', categoryId)
+  if (delErr) throw delErr
+  if (userIds.length === 0) return
+  const rows = userIds.map((uid) => ({ category_id: categoryId, user_id: uid }))
+  const { error } = await supabase.from('profile_categories').insert(rows)
+  if (error) throw error
+}
+
+/* ---------- Groups (visibilité + chat) ---------- */
 export async function listGroups() {
   const { data, error } = await supabase
     .from('groups')
@@ -36,9 +84,22 @@ export async function listGroups() {
 }
 
 export async function createGroup(name) {
+  const { data: sess } = await supabase.auth.getUser()
+  const uid = sess?.user?.id ?? null
   const { data, error } = await supabase
     .from('groups')
-    .insert({ name })
+    .insert({ name, created_by: uid })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function renameGroup(id, name) {
+  const { data, error } = await supabase
+    .from('groups')
+    .update({ name })
+    .eq('id', id)
     .select()
     .single()
   if (error) throw error
@@ -60,6 +121,28 @@ export async function setGroupMembers(groupId, userIds) {
   const rows = userIds.map((uid) => ({ group_id: groupId, user_id: uid }))
   const { error } = await supabase.from('group_members').insert(rows)
   if (error) throw error
+}
+
+/* ---------- Messages (chat de groupe) ---------- */
+export async function listMessages(groupId, limit = 200) {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: true })
+    .limit(limit)
+  if (error) throw error
+  return data
+}
+
+export async function sendMessage(groupId, userId, body) {
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({ group_id: groupId, user_id: userId, body })
+    .select()
+    .single()
+  if (error) throw error
+  return data
 }
 
 /* ---------- Tasks ---------- */
@@ -98,30 +181,101 @@ export async function deleteTask(id) {
   if (error) throw error
 }
 
-/* ---------- Social history ---------- */
-export async function listSocialHistory(days = 30) {
-  const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
+/* ---------- Rendez-vous (RDV) ---------- */
+export async function listAppointments() {
   const { data, error } = await supabase
-    .from('social_history')
+    .from('appointments')
     .select('*')
-    .gte('captured_on', since)
-    .order('captured_on', { ascending: true })
+    .order('start_at', { ascending: true })
   if (error) throw error
   return data
 }
 
-export async function insertSocialPoint(platform, handle, followers) {
-  const today = new Date().toISOString().slice(0, 10)
+export async function createAppointment(payload) {
   const { data, error } = await supabase
-    .from('social_history')
-    .upsert(
-      { platform, handle, followers, captured_on: today },
-      { onConflict: 'platform,handle,captured_on' },
-    )
+    .from('appointments')
+    .insert(payload)
     .select()
     .single()
   if (error) throw error
   return data
+}
+
+export async function updateAppointment(id, patch) {
+  const { data, error } = await supabase
+    .from('appointments')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteAppointment(id) {
+  const { error } = await supabase.from('appointments').delete().eq('id', id)
+  if (error) throw error
+}
+
+/* ---------- Périodes ---------- */
+export async function listPeriods() {
+  const { data, error } = await supabase
+    .from('periods')
+    .select('*')
+    .order('start_date', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createPeriod(payload) {
+  const { data, error } = await supabase
+    .from('periods')
+    .insert(payload)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updatePeriod(id, patch) {
+  const { data, error } = await supabase
+    .from('periods')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deletePeriod(id) {
+  const { error } = await supabase.from('periods').delete().eq('id', id)
+  if (error) throw error
+}
+
+/* ---------- Finances (owner uniquement) ---------- */
+export async function listFinances() {
+  const { data, error } = await supabase
+    .from('finances')
+    .select('*')
+    .order('occurred_on', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createFinance(payload) {
+  const { data, error } = await supabase
+    .from('finances')
+    .insert(payload)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteFinance(id) {
+  const { error } = await supabase.from('finances').delete().eq('id', id)
+  if (error) throw error
 }
 
 /* ---------- Insights ---------- */
@@ -145,30 +299,9 @@ export async function createInsight(payload) {
   return data
 }
 
-/* ---------- Visuals ---------- */
-export async function listVisuals(limit = 24) {
-  const { data, error } = await supabase
-    .from('visuals')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit)
-  if (error) throw error
-  return data
-}
-
-export async function createVisual(payload) {
-  const { data, error } = await supabase
-    .from('visuals')
-    .insert(payload)
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
-
 /* ---------- Realtime subscriptions ---------- */
 export function subscribeRealtime(tables, onChange) {
-  const channel = supabase.channel('smart-life-realtime')
+  const channel = supabase.channel(`smart-life-${Math.random().toString(36).slice(2, 8)}`)
   tables.forEach((t) => {
     channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, onChange)
   })
