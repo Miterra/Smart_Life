@@ -16,9 +16,10 @@ import {
   ShieldCheck,
   Shield,
   Activity,
+  Eraser,
 } from 'lucide-react'
-import { listActivity, subscribeRealtime } from '../lib/repository'
-import { isAdminOrOwner } from '../lib/roles'
+import { listActivity, deleteActivity, clearActivity, subscribeRealtime } from '../lib/repository'
+import { isAdminOrOwner, isOwner } from '../lib/roles'
 import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
@@ -46,6 +47,7 @@ export default function History({ profile }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
+  const owner = isOwner(profile.role)
 
   const refresh = async () => {
     try {
@@ -55,6 +57,29 @@ export default function History({ profile }) {
       setErr(e.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Suppression réservée au owner (RLS). Mise à jour optimiste + refresh de secours.
+  const removeRow = async (id) => {
+    if (!confirm('Supprimer cette entrée de l\'historique ?')) return
+    setRows((r) => r.filter((x) => x.id !== id))
+    try {
+      await deleteActivity(id)
+    } catch (e) {
+      setErr(e.message)
+      refresh()
+    }
+  }
+
+  const clearAll = async () => {
+    if (!confirm('Effacer TOUT l\'historique ? Cette action est irréversible.')) return
+    setRows([])
+    try {
+      await clearActivity()
+    } catch (e) {
+      setErr(e.message)
+      refresh()
     }
   }
 
@@ -75,11 +100,22 @@ export default function History({ profile }) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="heading text-2xl">Historique</h1>
-        <p className="text-xs text-ink-400 mt-1">
-          Toutes les actions de l'équipe, des plus récentes aux plus anciennes.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="heading text-2xl">Historique</h1>
+          <p className="text-xs text-ink-400 mt-1">
+            Toutes les actions de l'équipe, des plus récentes aux plus anciennes.
+          </p>
+        </div>
+        {owner && rows.length > 0 && (
+          <button
+            onClick={clearAll}
+            className="btn-ghost text-rose-300 flex-shrink-0 px-2.5 py-2"
+            title="Tout effacer"
+          >
+            <Eraser className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {err && (
@@ -108,7 +144,7 @@ export default function History({ profile }) {
               return (
                 <div key={r.id}>
                   {showDay && <DayDivider date={r.created_at} />}
-                  <Row row={r} />
+                  <Row row={r} canDelete={owner} onDelete={removeRow} />
                 </div>
               )
             })}
@@ -119,7 +155,7 @@ export default function History({ profile }) {
   )
 }
 
-function Row({ row }) {
+function Row({ row, canDelete, onDelete }) {
   const meta = ACTION_META[row.action] || { icon: HistoryIcon, color: '#94a3b8' }
   const Icon = meta.icon
   const actor = row.actor_name || 'Quelqu’un'
@@ -147,6 +183,15 @@ function Row({ row }) {
             {formatDistanceToNow(new Date(row.created_at), { addSuffix: true, locale: fr })}
           </p>
         </div>
+        {canDelete && (
+          <button
+            onClick={() => onDelete(row.id)}
+            className="text-ink-500 hover:text-rose-400 p-1 flex-shrink-0"
+            title="Supprimer cette entrée"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </motion.li>
   )

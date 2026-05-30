@@ -60,8 +60,9 @@ export const canCreateAppointments = (role) => role !== ROLES.USER
 // Périodes (voyage, vacances…) : owner + admin seulement
 export const canCreatePeriods = (role) => isAdminOrOwner(role)
 
-// Catégories de personnes : owner + admin
-export const canManageCategories = (role) => isAdminOrOwner(role)
+// Catégories : création / modification / suppression réservées au owner.
+// (Les admins ne peuvent plus créer/éditer/supprimer ni gérer les membres.)
+export const canManageCategories = (role) => isOwner(role)
 
 // Groupes (création / membres / renommer / supprimer) : owner + admin
 export const canManageGroups = (role) => isAdminOrOwner(role)

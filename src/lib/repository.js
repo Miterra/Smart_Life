@@ -40,6 +40,21 @@ export async function listActivity(limit = 100) {
   return data
 }
 
+/** Supprime une entrée d'historique (owner uniquement — RLS). Non journalisé. */
+export async function deleteActivity(id) {
+  const { error } = await supabase.from('activity_log').delete().eq('id', id)
+  if (error) throw error
+}
+
+/** Efface tout l'historique (owner uniquement — RLS). Non journalisé. */
+export async function clearActivity() {
+  const { error } = await supabase
+    .from('activity_log')
+    .delete()
+    .neq('id', '00000000-0000-0000-0000-000000000000')
+  if (error) throw error
+}
+
 /* ============================================================
  *  Mutes (par utilisateur : un groupe OU un membre)
  * ============================================================ */
