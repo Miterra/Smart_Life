@@ -14,6 +14,11 @@ import {
   AlertCircle,
   Bell,
   BellOff,
+  Paperclip,
+  FileText,
+  Download,
+  Smile,
+  Camera,
 } from 'lucide-react'
 import {
   listGroups,
@@ -21,9 +26,12 @@ import {
   renameGroup,
   deleteGroup,
   setGroupMembers,
+  setGroupAvatar,
   listProfiles,
   listMessages,
   sendMessage,
+  uploadChatFile,
+  toggleReaction,
   listMutes,
   muteGroup,
   unmuteGroup,
@@ -32,8 +40,39 @@ import {
 import { canManageGroups } from '../lib/roles'
 import { classNames, colorFor } from '../lib/utils'
 import Avatar from '../components/Avatar'
+import { usePresence, presenceLabel } from '../lib/presence'
 import { format, isToday, isYesterday } from 'date-fns'
 import { fr } from 'date-fns/locale'
+
+/** Réactions rapides disponibles sur les messages. */
+const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
+
+/** Photo d'un groupe (avatar_url) ou icône de repli. */
+function GroupAvatar({ group, size = 40, className = '' }) {
+  const style = { width: size, height: size }
+  if (group?.avatar_url) {
+    return (
+      <img
+        src={group.avatar_url}
+        alt={group.name || ''}
+        style={style}
+        loading="lazy"
+        className={classNames('rounded-xl object-cover flex-shrink-0', className)}
+      />
+    )
+  }
+  return (
+    <div
+      className={classNames(
+        'rounded-xl bg-neon-magenta/15 flex items-center justify-center flex-shrink-0',
+        className,
+      )}
+      style={style}
+    >
+      <MessagesSquare className="text-neon-magenta" style={{ width: size * 0.42, height: size * 0.42 }} />
+    </div>
+  )
+}
 
 export default function Groups({ profile }) {
   const [groups, setGroups] = useState([])
@@ -86,9 +125,16 @@ export default function Groups({ profile }) {
 
   const selected = groups.find((g) => g.id === selectedId) || null
 
-  const create = async (name, userIds) => {
+  const create = async (name, userIds, file) => {
     const g = await createGroup(name)
     if (userIds && userIds.length) await setGroupMembers(g.id, userIds)
+    if (file) {
+      try {
+        await setGroupAvatar(g.id, file)
+      } catch (e) {
+        console.error(e)
+      }
+    }
     setShowAdd(false)
     refresh()
   }
@@ -151,8 +197,15 @@ export default function Groups({ profile }) {
           <RenameModal
             group={renaming}
             onClose={() => setRenaming(null)}
-            onSave={async (name) => {
+            onSave={async (name, file) => {
               await renameGroup(renaming.id, name)
+              if (file) {
+                try {
+                  await setGroupAvatar(renaming.id, file)
+                } catch (e) {
+                  console.error(e)
+                }
+              }
               setRenaming(null)
               refresh()
             }}
@@ -227,9 +280,7 @@ function GroupRow({ group, profiles, muted, onOpen }) {
         className="card p-3.5 w-full text-left hover:bg-white/[0.04] transition"
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-neon-magenta/15 flex items-center justify-center flex-shrink-0">
-            <MessagesSquare className="w-4 h-4 text-neon-magenta" />
-          </div>
+          <GroupAvatar group={group} size={40} />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-white truncate flex items-center gap-1.5">
               {group.name}
@@ -268,9 +319,14 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
   const [body, setBody] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [pending, setPending] = useState(null) // { file, name, type, previewUrl }
   const scrollRef = useRef(null)
+  const fileRef = useRef(null)
+  const { isOnline } = usePresence()
 
-  const memberCount = (group.group_members || []).length
+  const memberIds = (group.group_members || []).map((m) => m.user_id)
+  const memberCount = memberIds.length
+  const onlineCount = memberIds.filter((id) => id !== profile.id && isOnline(id)).length
 
   const load = async () => {
     try {
@@ -286,7 +342,7 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
   useEffect(() => {
     setLoading(true)
     load()
-    const sub = subscribeRealtime(['messages'], load)
+    const sub = subscribeRealtime(['messages', 'message_reactions'], load)
     return () => sub.unsubscribe()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [group.id])
@@ -296,21 +352,79 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
     if (el) el.scrollTop = el.scrollHeight
   }, [messages.length, loading])
 
+  // Libère l'aperçu (objet-URL) quand la pièce jointe change / au démontage.
+  useEffect(() => {
+    return () => {
+      if (pending?.previewUrl) URL.revokeObjectURL(pending.previewUrl)
+    }
+  }, [pending])
+
+  const onPickFile = (e) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    const isImg = f.type.startsWith('image/')
+    const isPdf = f.type === 'application/pdf'
+    if (!isImg && !isPdf) {
+      alert('Formats acceptés : images et PDF.')
+      return
+    }
+    if (f.size > 25 * 1024 * 1024) {
+      alert('Fichier trop volumineux (max 25 Mo).')
+      return
+    }
+    setPending({
+      file: f,
+      name: f.name || 'fichier',
+      type: isImg ? 'image' : 'pdf',
+      previewUrl: isImg ? URL.createObjectURL(f) : null,
+    })
+  }
+
   const send = async (e) => {
     e.preventDefault()
     const text = body.trim()
-    if (!text) return
+    if (!text && !pending) return
+    const keepBody = body
+    const keepPending = pending
     setSending(true)
     setBody('')
+    setPending(null)
     try {
-      await sendMessage(group.id, profile.id, text)
+      let attachment = null
+      if (keepPending) attachment = await uploadChatFile(group.id, keepPending.file)
+      await sendMessage(group.id, profile.id, text, attachment)
       await load()
     } catch (e2) {
       console.error(e2)
-      setBody(text)
+      setBody(keepBody)
+      setPending(keepPending)
       alert("Impossible d'envoyer le message.")
     } finally {
       setSending(false)
+    }
+  }
+
+  const react = async (messageId, emoji) => {
+    // Optimiste : on bascule localement, le realtime réconcilie ensuite.
+    setMessages((cur) =>
+      cur.map((mm) => {
+        if (mm.id !== messageId) return mm
+        const arr = mm.message_reactions || []
+        const has = arr.some((r) => r.user_id === profile.id && r.emoji === emoji)
+        return {
+          ...mm,
+          message_reactions: has
+            ? arr.filter((r) => !(r.user_id === profile.id && r.emoji === emoji))
+            : [...arr, { user_id: profile.id, emoji }],
+        }
+      }),
+    )
+    try {
+      await toggleReaction(messageId, emoji)
+    } catch (err) {
+      console.error(err)
+      load()
     }
   }
 
@@ -320,13 +434,12 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
         <button onClick={onBack} className="btn-ghost p-2" title="Retour">
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <div className="w-9 h-9 rounded-xl bg-neon-magenta/15 flex items-center justify-center flex-shrink-0">
-          <MessagesSquare className="w-4 h-4 text-neon-magenta" />
-        </div>
+        <GroupAvatar group={group} size={38} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">{group.name}</p>
           <p className="text-[11px] text-ink-400 flex items-center gap-1">
             <Users className="w-3 h-3" /> {memberCount} {memberCount > 1 ? 'membres' : 'membre'}
+            {onlineCount > 0 && <span className="text-emerald-400">· {onlineCount} en ligne</span>}
           </p>
         </div>
         <div className="flex items-center gap-0.5">
@@ -343,7 +456,7 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
               <button onClick={onMembers} className="btn-ghost p-2" title="Membres">
                 <Users className="w-4 h-4" />
               </button>
-              <button onClick={onRename} className="btn-ghost p-2" title="Renommer">
+              <button onClick={onRename} className="btn-ghost p-2" title="Modifier">
                 <Pencil className="w-4 h-4" />
               </button>
               <button
@@ -379,14 +492,52 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
             return (
               <div key={m.id}>
                 {showDay && <DayDivider date={m.created_at} />}
-                <Bubble m={m} mine={mine} author={author} showAuthor={showAuthor} />
+                <Bubble
+                  m={m}
+                  mine={mine}
+                  author={author}
+                  showAuthor={showAuthor}
+                  myId={profile.id}
+                  onReact={react}
+                />
               </div>
             )
           })
         )}
       </div>
 
+      {pending && (
+        <div className="flex items-center gap-2 p-2 rounded-xl bg-white/5 border border-white/10">
+          {pending.type === 'image' ? (
+            <img src={pending.previewUrl} alt="" className="w-10 h-10 rounded-lg object-cover" />
+          ) : (
+            <div className="w-10 h-10 rounded-lg bg-rose-500/15 flex items-center justify-center flex-shrink-0">
+              <FileText className="w-5 h-5 text-rose-300" />
+            </div>
+          )}
+          <span className="flex-1 min-w-0 text-xs text-ink-200 truncate">{pending.name}</span>
+          <button type="button" onClick={() => setPending(null)} className="btn-ghost p-1" title="Retirer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <form onSubmit={send} className="flex items-center gap-2">
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,application/pdf"
+          className="hidden"
+          onChange={onPickFile}
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="btn-ghost p-2.5 flex-shrink-0"
+          title="Joindre une image ou un PDF"
+        >
+          <Paperclip className="w-5 h-5" />
+        </button>
         <input
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -396,8 +547,8 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
         />
         <button
           type="submit"
-          disabled={sending || !body.trim()}
-          className="btn-primary px-3.5 py-2.5 disabled:opacity-40"
+          disabled={sending || (!body.trim() && !pending)}
+          className="btn-primary px-3.5 py-2.5 disabled:opacity-40 flex-shrink-0"
           title="Envoyer"
         >
           <Send className="w-4 h-4" />
@@ -407,31 +558,182 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
   )
 }
 
-function Bubble({ m, mine, author, showAuthor }) {
+function Bubble({ m, mine, author, showAuthor, myId, onReact }) {
   const name = author?.full_name || author?.email || 'Inconnu'
   const color = author?.avatar_color || colorFor(m.user_id)
+
+  // Agrège les réactions par emoji : { emoji, count, mine }.
+  const reactions = useMemo(() => {
+    const map = new Map()
+    for (const r of m.message_reactions || []) {
+      const cur = map.get(r.emoji) || { emoji: r.emoji, count: 0, mine: false }
+      cur.count += 1
+      if (r.user_id === myId) cur.mine = true
+      map.set(r.emoji, cur)
+    }
+    return [...map.values()]
+  }, [m.message_reactions, myId])
+
+  const hasText = !!(m.body && m.body.trim())
+  const hasAttachment = !!m.attachment_path
+
   return (
-    <div className={classNames('flex flex-col', mine ? 'items-end' : 'items-start')}>
+    <div className={classNames('group flex flex-col', mine ? 'items-end' : 'items-start')}>
       {showAuthor && (
         <span className="text-[11px] font-medium mb-0.5 ml-1" style={{ color }}>
           {name}
         </span>
       )}
-      <div
-        className={classNames(
-          'max-w-[80%] px-3 py-2 rounded-2xl text-sm leading-snug whitespace-pre-wrap break-words',
-          mine
-            ? 'bg-neon-cyan/20 text-white rounded-br-md'
-            : 'bg-white/5 text-ink-100 rounded-bl-md',
-        )}
-      >
-        {m.body}
+      <div className={classNames('flex items-center gap-1', mine ? 'flex-row-reverse' : 'flex-row')}>
+        <div
+          className={classNames(
+            'max-w-[80%] rounded-2xl text-sm leading-snug overflow-hidden',
+            mine ? 'bg-neon-cyan/20 text-white rounded-br-md' : 'bg-white/5 text-ink-100 rounded-bl-md',
+          )}
+        >
+          {hasAttachment && <Attachment m={m} />}
+          {hasText && <div className="px-3 py-2 whitespace-pre-wrap break-words">{m.body}</div>}
+        </div>
+        <ReactionAdd onPick={(emoji) => onReact(m.id, emoji)} alignRight={mine} />
       </div>
+
+      {reactions.length > 0 && (
+        <div className={classNames('flex flex-wrap gap-1 mt-1', mine ? 'justify-end' : 'justify-start')}>
+          {reactions.map((r) => (
+            <button
+              key={r.emoji}
+              type="button"
+              onClick={() => onReact(m.id, r.emoji)}
+              className={classNames(
+                'flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full text-[11px] border transition',
+                r.mine
+                  ? 'bg-neon-cyan/20 border-neon-cyan/50 text-white'
+                  : 'bg-white/5 border-white/10 text-ink-200 hover:bg-white/10',
+              )}
+            >
+              <span className="leading-none">{r.emoji}</span>
+              <span className="leading-none tabular-nums">{r.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <span className="text-[9px] text-ink-500 mt-0.5 mx-1">
         {format(new Date(m.created_at), 'HH:mm')}
       </span>
     </div>
   )
+}
+
+/** Pièce jointe d'un message : image (ouvre l'URL signée) ou fichier/PDF téléchargeable. */
+function Attachment({ m }) {
+  const url = m.attachment_url || null
+  if (m.attachment_type === 'image') {
+    if (!url) {
+      return (
+        <div className="w-48 h-32 bg-white/5 flex items-center justify-center text-ink-500 text-xs">
+          Image indisponible
+        </div>
+      )
+    }
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="block">
+        <img
+          src={url}
+          alt={m.attachment_name || ''}
+          className="max-w-[220px] max-h-[280px] w-auto h-auto object-cover"
+          loading="lazy"
+        />
+      </a>
+    )
+  }
+  return (
+    <a
+      href={url || undefined}
+      target="_blank"
+      rel="noreferrer"
+      className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-white/5 transition min-w-[180px]"
+    >
+      <div className="w-9 h-9 rounded-lg bg-rose-500/15 flex items-center justify-center flex-shrink-0">
+        <FileText className="w-5 h-5 text-rose-300" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium text-white truncate">{m.attachment_name || 'Fichier'}</p>
+        {m.attachment_size != null && (
+          <p className="text-[10px] text-ink-400">{formatBytes(m.attachment_size)}</p>
+        )}
+      </div>
+      <Download className="w-4 h-4 text-ink-300 flex-shrink-0" />
+    </a>
+  )
+}
+
+/** Bouton « réagir » → petit sélecteur d'emojis fixe. */
+function ReactionAdd({ onPick, alignRight }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onDown = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('touchstart', onDown)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('touchstart', onDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="p-1 text-ink-500 hover:text-ink-200 opacity-70 group-hover:opacity-100 transition"
+        title="Réagir"
+      >
+        <Smile className="w-4 h-4" />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.85, y: 4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.85, y: 4 }}
+            transition={{ duration: 0.12 }}
+            className={classNames(
+              'absolute bottom-full mb-1 z-20 flex gap-0.5 p-1 rounded-full glass-strong border border-white/10 shadow-lg',
+              alignRight ? 'right-0' : 'left-0',
+            )}
+          >
+            {REACTIONS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => {
+                  onPick(emoji)
+                  setOpen(false)
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 text-base leading-none transition"
+              >
+                {emoji}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+/** Taille de fichier lisible (o / Ko / Mo). */
+function formatBytes(bytes) {
+  if (!bytes || bytes < 1024) return `${bytes || 0} o`
+  const kb = bytes / 1024
+  if (kb < 1024) return `${Math.round(kb)} Ko`
+  return `${(kb / 1024).toFixed(1)} Mo`
 }
 
 function DayDivider({ date }) {
@@ -465,8 +767,16 @@ function dayLabel(d) {
 function AddGroupModal({ profiles, onClose, onCreate }) {
   const [name, setName] = useState('')
   const [selected, setSelected] = useState(new Set())
+  const [photo, setPhoto] = useState(null) // { file, previewUrl }
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+
+  useEffect(
+    () => () => {
+      if (photo?.previewUrl) URL.revokeObjectURL(photo.previewUrl)
+    },
+    [photo],
+  )
 
   const toggle = (id) => {
     const next = new Set(selected)
@@ -479,7 +789,7 @@ function AddGroupModal({ profiles, onClose, onCreate }) {
     setSaving(true)
     setErr('')
     try {
-      await onCreate(name.trim(), [...selected])
+      await onCreate(name.trim(), [...selected], photo?.file || null)
     } catch (e2) {
       setErr(e2.message || 'Erreur')
       setSaving(false)
@@ -489,6 +799,7 @@ function AddGroupModal({ profiles, onClose, onCreate }) {
   return (
     <Modal onClose={onClose} title="Nouveau groupe">
       <form onSubmit={submit} className="space-y-3">
+        <GroupPhotoField photo={photo} onPick={setPhoto} />
         <input
           autoFocus
           type="text"
@@ -557,6 +868,9 @@ function MembersModal({ group, profiles, onClose, onSave }) {
 }
 
 function MemberToggle({ person, on, onToggle }) {
+  const { isOnline, lastSeenAt } = usePresence()
+  const online = isOnline(person.id)
+  const label = presenceLabel(online, lastSeenAt(person.id))
   return (
     <li>
       <button
@@ -567,12 +881,17 @@ function MemberToggle({ person, on, onToggle }) {
           on ? 'bg-neon-cyan/15 ring-1 ring-neon-cyan/40' : 'hover:bg-white/5',
         )}
       >
-        <Avatar profile={person} size={32} />
+        <Avatar profile={person} size={32} showPresence />
         <div className="flex-1 min-w-0 text-left">
           <p className="text-sm font-medium text-white truncate">
             {person.full_name || person.email}
           </p>
-          <p className="text-[11px] text-ink-400">{person.role}</p>
+          <p className="text-[11px] text-ink-400 truncate">
+            {person.role}
+            {label && (
+              <span className={classNames('ml-1.5', online && 'text-emerald-400')}>· {label}</span>
+            )}
+          </p>
         </div>
         {on && <Check className="w-4 h-4 text-neon-cyan" />}
       </button>
@@ -582,19 +901,29 @@ function MemberToggle({ person, on, onToggle }) {
 
 function RenameModal({ group, onClose, onSave }) {
   const [name, setName] = useState(group.name)
+  const [photo, setPhoto] = useState(null) // { file, previewUrl }
   const [saving, setSaving] = useState(false)
+
+  useEffect(
+    () => () => {
+      if (photo?.previewUrl) URL.revokeObjectURL(photo.previewUrl)
+    },
+    [photo],
+  )
+
   const submit = async (e) => {
     e.preventDefault()
     setSaving(true)
     try {
-      await onSave(name.trim())
+      await onSave(name.trim(), photo?.file || null)
     } finally {
       setSaving(false)
     }
   }
   return (
-    <Modal onClose={onClose} title="Renommer le groupe">
+    <Modal onClose={onClose} title="Modifier le groupe">
       <form onSubmit={submit} className="space-y-3">
+        <GroupPhotoField group={group} photo={photo} onPick={setPhoto} />
         <input
           autoFocus
           type="text"
@@ -608,6 +937,52 @@ function RenameModal({ group, onClose, onSave }) {
         </button>
       </form>
     </Modal>
+  )
+}
+
+/** Sélecteur de photo de groupe (création / édition). */
+function GroupPhotoField({ group, photo, onPick }) {
+  const fileRef = useRef(null)
+  const onChange = (e) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    if (!f.type.startsWith('image/')) {
+      alert('Choisis une image.')
+      return
+    }
+    if (f.size > 25 * 1024 * 1024) {
+      alert('Image trop volumineuse (max 25 Mo).')
+      return
+    }
+    onPick({ file: f, previewUrl: URL.createObjectURL(f) })
+  }
+  const preview = photo?.previewUrl || group?.avatar_url || null
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        className="relative flex-shrink-0"
+        title="Choisir une photo"
+      >
+        {preview ? (
+          <img src={preview} alt="" className="w-16 h-16 rounded-2xl object-cover" />
+        ) : (
+          <div className="w-16 h-16 rounded-2xl bg-neon-magenta/15 flex items-center justify-center">
+            <MessagesSquare className="w-7 h-7 text-neon-magenta" />
+          </div>
+        )}
+        <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-neon-cyan flex items-center justify-center border-2 border-ink-950">
+          <Camera className="w-3.5 h-3.5 text-ink-950" />
+        </span>
+      </button>
+      <div className="text-xs text-ink-400 leading-relaxed">
+        <p className="text-ink-200 font-medium">Photo du groupe</p>
+        <p>Optionnelle · image (max 25 Mo)</p>
+      </div>
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onChange} />
+    </div>
   )
 }
 

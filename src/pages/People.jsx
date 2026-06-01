@@ -48,6 +48,7 @@ import {
 } from '../lib/roles'
 import { classNames, initialsFor, colorFor } from '../lib/utils'
 import Avatar from '../components/Avatar'
+import { usePresence, presenceLabel } from '../lib/presence'
 
 const ROLE_ICONS = { owner: Crown, admin: Shield, manager: UserCog, user: UserIcon }
 const CAT_COLORS = [
@@ -334,6 +335,9 @@ function PersonRow({ person, me, name, onSetRole, onRemove, onOpen }) {
   const isSelf = person.id === me.id
   const canChange = canChangeRole(me.role) && !isSelf
   const canDelete = me.role === ROLES.OWNER && !isSelf
+  const { isOnline, lastSeenAt } = usePresence()
+  const online = isOnline(person.id)
+  const presence = isSelf ? null : presenceLabel(online, lastSeenAt(person.id))
   return (
     <motion.li
       layout
@@ -345,7 +349,7 @@ function PersonRow({ person, me, name, onSetRole, onRemove, onOpen }) {
       onClick={onOpen}
     >
       <div className="flex items-center gap-3">
-        <Avatar profile={person} size={40} />
+        <Avatar profile={person} size={40} showPresence />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">
             {name || person.full_name || person.email}
@@ -354,6 +358,11 @@ function PersonRow({ person, me, name, onSetRole, onRemove, onOpen }) {
           <p className="text-[11px] text-ink-400 truncate flex items-center gap-1">
             <Mail className="w-3 h-3" /> {person.email}
           </p>
+          {presence && (
+            <p className={classNames('text-[11px] truncate', online ? 'text-emerald-400' : 'text-ink-500')}>
+              {presence}
+            </p>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
           <span className={classNames('chip border', ROLE_COLORS[person.role])}>
@@ -404,6 +413,9 @@ function PersonDetailModal({
   const isSelf = person.id === me.id
   const realName = person.full_name || person.email
   const displayName = name || realName
+  const { isOnline, lastSeenAt } = usePresence()
+  const online = isOnline(person.id)
+  const presence = isSelf ? null : presenceLabel(online, lastSeenAt(person.id))
   const [aliasInput, setAliasInput] = useState(aliasValue || '')
   const [savingAlias, setSavingAlias] = useState(false)
   const myCats = (categories || []).filter((c) =>
@@ -422,7 +434,7 @@ function PersonDetailModal({
   return (
     <Modal onClose={onClose}>
       <div className="flex flex-col items-center text-center pt-2">
-        <Avatar profile={person} size={96} ring className="shadow-lg mb-3" />
+        <Avatar profile={person} size={96} ring showPresence className="shadow-lg mb-3" />
         <h3 className="heading text-xl text-white">{displayName}</h3>
         {canAlias && aliasValue && (
           <p className="text-[11px] text-ink-500 mt-0.5">Vrai nom : {realName}</p>
@@ -430,6 +442,11 @@ function PersonDetailModal({
         <p className="text-xs text-ink-400 flex items-center gap-1 mt-1">
           <Mail className="w-3 h-3" /> {person.email}
         </p>
+        {presence && (
+          <p className={classNames('text-[11px] mt-1 font-medium', online ? 'text-emerald-400' : 'text-ink-500')}>
+            {presence}
+          </p>
+        )}
         <span className={classNames('chip border mt-2.5', ROLE_COLORS[person.role])}>
           <Icon className="w-3 h-3" />
           {ROLE_LABELS[person.role]}

@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
   LayoutDashboard,
   CheckSquare,
@@ -73,17 +73,18 @@ export default function Layout({ profile, financeEnabled = false, children }) {
       {/* Content */}
       <main className="flex-1">
         <div className="max-w-3xl mx-auto px-4 py-4">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
+          {/* Page transition: keyed motion.div replays the enter fade on each
+              route change. No AnimatePresence/`mode="wait"` here — its exit-wait
+              deadlocks when the outgoing page (e.g. the chat view) updates state
+              mid-exit, leaving the next tab on a black screen. */}
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+          >
+            {children}
+          </motion.div>
         </div>
       </main>
 

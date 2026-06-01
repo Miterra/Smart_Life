@@ -175,7 +175,7 @@ Deno.serve(async (req: Request) => {
     // 1) Message
     const { data: msg } = await supabase
       .from('messages')
-      .select('id, group_id, user_id, body, created_at')
+      .select('id, group_id, user_id, body, attachment_type, created_at')
       .eq('id', message_id)
       .single()
     if (!msg) return json({ ok: true, skipped: 'message not found' })
@@ -232,7 +232,14 @@ Deno.serve(async (req: Request) => {
 
     const senderName = sender?.full_name || sender?.email?.split('@')[0] || 'Quelqu\'un'
     const groupName = group?.name || 'Groupe'
-    const text = (msg.body || '').slice(0, 140)
+    // Corps : texte du message, ou libellé de la pièce jointe si message sans texte.
+    const trimmed = (msg.body || '').trim()
+    let text: string
+    if (trimmed) text = trimmed.slice(0, 140)
+    else if (msg.attachment_type === 'image') text = '📷 Photo'
+    else if (msg.attachment_type === 'pdf') text = '📄 PDF'
+    else if (msg.attachment_type) text = '📎 Fichier'
+    else text = ''
     const payload = JSON.stringify({
       notification: {
         title: groupName,

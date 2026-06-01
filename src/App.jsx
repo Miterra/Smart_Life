@@ -15,6 +15,7 @@ import History from './pages/History'
 import Splash from './components/Splash'
 import { canAccessFinance, canViewPeople, isAdminOrOwner, isAliasAccount } from './lib/roles'
 import { setCurrentActor, listMyCategoryIds } from './lib/repository'
+import { PresenceProvider } from './lib/presence'
 
 export default function App() {
   const { session, profile, loading } = useAuth()
@@ -69,8 +70,9 @@ export default function App() {
   const financeEnabled = canAccessFinance(profile.role, myCategoryCount)
 
   return (
-    <Layout profile={profile} financeEnabled={financeEnabled}>
-      <Routes>
+    <PresenceProvider>
+      <Layout profile={profile} financeEnabled={financeEnabled}>
+        <Routes>
         <Route path="/" element={<Dashboard profile={profile} />} />
         <Route path="/tasks" element={<Tasks profile={profile} />} />
         <Route path="/calendar" element={<Calendar profile={profile} />} />
@@ -101,7 +103,8 @@ export default function App() {
         />
         <Route path="/settings" element={<Settings profile={profile} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Layout>
+        </Routes>
+      </Layout>
+    </PresenceProvider>
   )
 }

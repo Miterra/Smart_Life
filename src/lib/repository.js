@@ -107,6 +107,25 @@ export async function uploadAvatar(file, userId) {
   return data.publicUrl
 }
 
+/**
+ * Upload une photo de groupe. Bucket public "avatars", rangée sous le dossier de
+ * l'uploader (la policy d'insertion exige folder[1] = auth.uid()).
+ */
+export async function uploadGroupAvatar(file, groupId) {
+  const uid = await _myId()
+  const rawExt = (file.name?.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const ext = rawExt || 'jpg'
+  const path = `${uid}/group_${groupId}_${Date.now()}.${ext}`
+  const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, {
+    cacheControl: '3600',
+    upsert: true,
+    contentType: file.type || undefined,
+  })
+  if (upErr) throw upErr
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+  return data.publicUrl
+}
+
 /* ---------- Profiles ---------- */
 export async function listProfiles() {
   const { data, error } = await supabase
@@ -124,6 +143,20 @@ export async function updateProfile(id, patch) {
     .eq('id', id)
     .select()
     .single()
+  if (error) throw error
+  return data
+}
+
+/* ---------- Présence (heartbeat + dernière activité) ---------- */
+/** Marque l'utilisateur courant comme actif (met à jour profiles.last_seen). */
+export async function heartbeat() {
+  const { error } = await supabase.rpc('heartbeat')
+  if (error) throw error
+}
+
+/** Liste légère { id, last_seen } pour calculer qui est en ligne. */
+export async function listPresence() {
+  const { data, error } = await supabase.from('profiles').select('id, last_seen')
   if (error) throw error
   return data
 }
@@ -283,6 +316,19 @@ export async function renameGroup(id, name) {
   return data
 }
 
+/** Définit/Met à jour la photo d'un groupe (owner + admin via RLS). */
+export async function setGroupAvatar(groupId, file) {
+  const url = await uploadGroupAvatar(file, groupId)
+  const { data, error } = await supabase
+    .from('groups')
+    .update({ avatar_url: url })
+    .eq('id', groupId)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
 export async function deleteGroup(id) {
   const { data: g } = await supabase.from('groups').select('name').eq('id', id).single()
   const { error } = await supabase.from('groups').delete().eq('id', id)
@@ -316,22 +362,86 @@ export async function setGroupMembers(groupId, userIds) {
 export async function listMessages(groupId, limit = 200) {
   const { data, error } = await supabase
     .from('messages')
-    .select('*')
+    .select('*, message_reactions(user_id, emoji)')
     .eq('group_id', groupId)
     .order('created_at', { ascending: true })
     .limit(limit)
   if (error) throw error
+  const rows = data || []
+
+  // Pièces jointes : bucket privé → on génère des URLs signées (1 h) à la volée.
+  const paths = rows.filter((m) => m.attachment_path).map((m) => m.attachment_path)
+  if (paths.length > 0) {
+    const { data: signed } = await supabase.storage.from('chat-files').createSignedUrls(paths, 3600)
+    const map = {}
+    for (const s of signed || []) if (s?.path && s?.signedUrl) map[s.path] = s.signedUrl
+    for (const m of rows) if (m.attachment_path) m.attachment_url = map[m.attachment_path] || null
+  }
+  return rows
+}
+
+/** Déduit le type de pièce jointe à partir du mime. */
+function attachmentTypeFor(file) {
+  const mime = file?.type || ''
+  if (mime.startsWith('image/')) return 'image'
+  if (mime === 'application/pdf') return 'pdf'
+  return 'file'
+}
+
+/** Upload une pièce jointe dans le bucket privé "chat-files" (sous {group_id}/...). */
+export async function uploadChatFile(groupId, file) {
+  const rawExt = (file.name?.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const ext = rawExt ? `.${rawExt}` : ''
+  const path = `${groupId}/${crypto.randomUUID()}${ext}`
+  const { error } = await supabase.storage.from('chat-files').upload(path, file, {
+    cacheControl: '3600',
+    upsert: false,
+    contentType: file.type || undefined,
+  })
+  if (error) throw error
+  return {
+    path,
+    type: attachmentTypeFor(file),
+    name: file.name || 'fichier',
+    size: file.size ?? null,
+  }
+}
+
+export async function sendMessage(groupId, userId, body, attachment = null) {
+  const row = { group_id: groupId, user_id: userId, body: body && body.trim() ? body : null }
+  if (attachment) {
+    row.attachment_path = attachment.path
+    row.attachment_type = attachment.type
+    row.attachment_name = attachment.name
+    row.attachment_size = attachment.size
+  }
+  const { data, error } = await supabase.from('messages').insert(row).select().single()
+  if (error) throw error
   return data
 }
 
-export async function sendMessage(groupId, userId, body) {
-  const { data, error } = await supabase
-    .from('messages')
-    .insert({ group_id: groupId, user_id: userId, body })
-    .select()
-    .single()
+/** Ajoute/retire une réaction emoji de l'utilisateur courant. Renvoie true si ajoutée. */
+export async function toggleReaction(messageId, emoji) {
+  const uid = await _myId()
+  if (!uid) throw new Error('not authenticated')
+  const { data: existing, error: selErr } = await supabase
+    .from('message_reactions')
+    .select('id')
+    .eq('message_id', messageId)
+    .eq('user_id', uid)
+    .eq('emoji', emoji)
+    .maybeSingle()
+  if (selErr) throw selErr
+  if (existing) {
+    const { error } = await supabase.from('message_reactions').delete().eq('id', existing.id)
+    if (error) throw error
+    return false
+  }
+  const { error } = await supabase
+    .from('message_reactions')
+    .insert({ message_id: messageId, user_id: uid, emoji })
   if (error) throw error
-  return data
+  return true
 }
 
 /* ---------- Tasks ---------- */
