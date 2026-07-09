@@ -73,7 +73,7 @@ export default function Finance({ profile, myCategoryCount = 0 }) {
 
   useEffect(() => {
     refresh()
-    const sub = subscribeRealtime(['finances'], refresh)
+    const sub = subscribeRealtime(['finances', 'categories', 'profile_categories'], refresh)
     return () => sub.unsubscribe()
   }, [])
 
@@ -373,7 +373,7 @@ function FinanceRow({ row, canDelete, catName, onChange }) {
         {eur(row.amount)}
       </span>
       {canDelete && (
-        <button onClick={remove} className="text-ink-400 hover:text-rose-400 p-1">
+        <button onClick={remove} aria-label="Supprimer l'opération" className="text-ink-400 hover:text-rose-400 p-1">
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       )}

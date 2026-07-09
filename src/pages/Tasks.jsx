@@ -215,14 +215,22 @@ function TaskRow({ task, profile, profiles, onEdit, onChange }) {
     task.status === 'todo' ? 'in_progress' : task.status === 'in_progress' ? 'done' : 'todo'
 
   const cycleStatus = async () => {
-    await updateTask(task.id, { status: nextStatus })
-    onChange()
+    try {
+      await updateTask(task.id, { status: nextStatus })
+      onChange()
+    } catch (e) {
+      alert(e.message)
+    }
   }
 
   const remove = async () => {
     if (!confirm('Supprimer cette tâche ?')) return
-    await deleteTask(task.id)
-    onChange()
+    try {
+      await deleteTask(task.id)
+      onChange()
+    } catch (e) {
+      alert(e.message)
+    }
   }
 
   return (
@@ -335,6 +343,7 @@ function TaskForm({ initial, profile, profiles, groups, categories = [], onCance
   const [groupId, setGroupId] = useState(initial?.group_id || '')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
 
   // Manager : ne peut assigner qu'à lui-même ou aux users
   const basePeople = useMemo(() => {
@@ -350,8 +359,12 @@ function TaskForm({ initial, profile, profiles, groups, categories = [], onCance
     if (!categoryFilter) return basePeople
     const cat = categories.find((c) => c.id === categoryFilter)
     const ids = new Set((cat?.profile_categories || []).map((m) => m.user_id))
-    return basePeople.filter((p) => ids.has(p.id))
-  }, [basePeople, categoryFilter, categories])
+    const list = basePeople.filter((p) => ids.has(p.id))
+    // Toujours préserver l'assigné initial (dans le périmètre) même hors de la catégorie filtrée
+    const orig = initial?.assigned_to && basePeople.find((p) => p.id === initial.assigned_to)
+    if (orig && !list.some((p) => p.id === orig.id)) return [...list, orig]
+    return list
+  }, [basePeople, categoryFilter, categories, initial])
 
   // Si l'assigné courant n'est plus dans la liste filtrée, on réinitialise
   useEffect(() => {
@@ -363,6 +376,7 @@ function TaskForm({ initial, profile, profiles, groups, categories = [], onCance
   const submit = async (e) => {
     e.preventDefault()
     setSaving(true)
+    setErr('')
     try {
       await onSave({
         title,
@@ -373,6 +387,8 @@ function TaskForm({ initial, profile, profiles, groups, categories = [], onCance
         assigned_to: assignedTo || null,
         group_id: groupId || null,
       })
+    } catch (e2) {
+      setErr(e2.message)
     } finally {
       setSaving(false)
     }
@@ -518,6 +534,12 @@ function TaskForm({ initial, profile, profiles, groups, categories = [], onCance
             </label>
           )}
         </div>
+
+        {err && (
+          <div className="mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-200 text-xs">
+            {err}
+          </div>
+        )}
 
         <button type="submit" className="btn-primary w-full mt-5" disabled={saving}>
           {saving ? 'Enregistrement…' : initial ? 'Sauvegarder' : 'Créer la tâche'}

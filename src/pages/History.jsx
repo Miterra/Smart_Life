@@ -50,6 +50,7 @@ export default function History({ profile }) {
   const owner = isOwner(profile.role)
 
   const refresh = async () => {
+    setErr('')
     try {
       const data = await listActivity(150)
       setRows(data)
@@ -142,10 +143,7 @@ export default function History({ profile }) {
               const prev = rows[i - 1]
               const showDay = !prev || !sameDay(prev.created_at, r.created_at)
               return (
-                <div key={r.id}>
-                  {showDay && <DayDivider date={r.created_at} />}
-                  <Row row={r} canDelete={owner} onDelete={removeRow} />
-                </div>
+                <Row key={r.id} row={r} showDay={showDay} canDelete={owner} onDelete={removeRow} />
               )
             })}
           </AnimatePresence>
@@ -155,7 +153,7 @@ export default function History({ profile }) {
   )
 }
 
-function Row({ row, canDelete, onDelete }) {
+function Row({ row, canDelete, onDelete, showDay }) {
   const meta = ACTION_META[row.action] || { icon: HistoryIcon, color: '#94a3b8' }
   const Icon = meta.icon
   const actor = row.actor_name || 'Quelqu’un'
@@ -165,33 +163,35 @@ function Row({ row, canDelete, onDelete }) {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
-      className="card p-3"
     >
-      <div className="flex items-center gap-3">
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: meta.color + '22' }}
-        >
-          <Icon className="w-4 h-4" style={{ color: meta.color }} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-ink-100 leading-snug">
-            <span className="font-semibold text-white">{actor}</span> {row.summary}
-          </p>
-          <p className="text-[11px] text-ink-500 mt-0.5">
-            {format(new Date(row.created_at), 'HH:mm')} ·{' '}
-            {formatDistanceToNow(new Date(row.created_at), { addSuffix: true, locale: fr })}
-          </p>
-        </div>
-        {canDelete && (
-          <button
-            onClick={() => onDelete(row.id)}
-            className="text-ink-500 hover:text-rose-400 p-1 flex-shrink-0"
-            title="Supprimer cette entrée"
+      {showDay && <DayDivider date={row.created_at} />}
+      <div className="card p-3">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: meta.color + '22' }}
           >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        )}
+            <Icon className="w-4 h-4" style={{ color: meta.color }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-ink-100 leading-snug">
+              <span className="font-semibold text-white">{actor}</span> {row.summary}
+            </p>
+            <p className="text-[11px] text-ink-500 mt-0.5">
+              {format(new Date(row.created_at), 'HH:mm')} ·{' '}
+              {formatDistanceToNow(new Date(row.created_at), { addSuffix: true, locale: fr })}
+            </p>
+          </div>
+          {canDelete && (
+            <button
+              onClick={() => onDelete(row.id)}
+              className="text-ink-500 hover:text-rose-400 p-1 flex-shrink-0"
+              title="Supprimer cette entrée"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
     </motion.li>
   )

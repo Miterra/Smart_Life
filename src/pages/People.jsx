@@ -384,6 +384,7 @@ function PersonRow({ person, me, name, onSetRole, onRemove, onOpen }) {
             {canDelete && (
               <button
                 onClick={() => onRemove(person.id)}
+                aria-label="Retirer le membre"
                 className="text-ink-400 hover:text-rose-400 p-1"
               >
                 <Trash2 className="w-3 h-3" />
@@ -581,14 +582,15 @@ function CategoryRow({ category, profiles, onEdit, onMembers, onRemove }) {
           </div>
         </div>
         <div className="flex items-center gap-0.5">
-          <button onClick={onMembers} className="btn-ghost p-2" title="Personnes">
+          <button onClick={onMembers} aria-label="Personnes de la catégorie" className="btn-ghost p-2" title="Personnes">
             <Users className="w-4 h-4" />
           </button>
-          <button onClick={onEdit} className="btn-ghost p-2" title="Modifier">
+          <button onClick={onEdit} aria-label="Modifier la catégorie" className="btn-ghost p-2" title="Modifier">
             <Pencil className="w-4 h-4" />
           </button>
           <button
             onClick={onRemove}
+            aria-label="Supprimer la catégorie"
             className="text-ink-400 hover:text-rose-400 p-2"
             title="Supprimer"
           >

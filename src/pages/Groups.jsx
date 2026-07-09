@@ -127,7 +127,12 @@ export default function Groups({ profile }) {
 
   const create = async (name, userIds, file) => {
     const g = await createGroup(name)
-    if (userIds && userIds.length) await setGroupMembers(g.id, userIds)
+    // Un admin qui crée un groupe en fait toujours partie : sinon, la
+    // visibilité étant liée à l'appartenance, il ne verrait plus le groupe
+    // qu'il vient de créer. Le owner, lui, supervise déjà tous les groupes.
+    const memberIds = new Set(userIds || [])
+    if (profile.role !== 'owner') memberIds.add(profile.id)
+    if (memberIds.size) await setGroupMembers(g.id, [...memberIds])
     if (file) {
       try {
         await setGroupAvatar(g.id, file)
@@ -167,6 +172,7 @@ export default function Groups({ profile }) {
           profiles={profiles}
           loading={loading}
           canManage={canManage}
+          profile={profile}
           mutedGroups={mutedGroups}
           onOpen={(g) => setSelectedId(g.id)}
           onAdd={() => setShowAdd(true)}
@@ -185,6 +191,7 @@ export default function Groups({ profile }) {
           <MembersModal
             group={managing}
             profiles={profiles}
+            profile={profile}
             onClose={() => setManaging(null)}
             onSave={async (userIds) => {
               await setGroupMembers(managing.id, userIds)
@@ -217,7 +224,7 @@ export default function Groups({ profile }) {
 }
 
 /* ============================ Liste des groupes ============================ */
-function ListView({ groups, profiles, loading, canManage, mutedGroups, onOpen, onAdd }) {
+function ListView({ groups, profiles, loading, canManage, profile, mutedGroups, onOpen, onAdd }) {
   return (
     <>
       <div className="flex items-center justify-between">
@@ -245,7 +252,11 @@ function ListView({ groups, profiles, loading, canManage, mutedGroups, onOpen, o
         <div className="card p-8 text-center">
           <MessagesSquare className="w-10 h-10 text-ink-500 mx-auto mb-3" />
           <p className="text-sm text-ink-300 mb-3">
-            {canManage ? "Aucun groupe pour l'instant." : "Tu n'es membre d'aucun groupe."}
+            {canManage
+              ? profile.role === 'owner'
+                ? "Aucun groupe pour l'instant."
+                : 'Aucun groupe visible. Crée-en un pour démarrer une conversation.'
+              : "Tu n'es membre d'aucun groupe."}
           </p>
           {canManage && (
             <button onClick={onAdd} className="btn-secondary">
@@ -398,7 +409,13 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
     } catch (e2) {
       console.error(e2)
       setBody(keepBody)
-      setPending(keepPending)
+      // L'object-URL de l'aperçu a été révoqué par le cleanup lors du
+      // setPending(null) : on le régénère pour éviter une vignette cassée.
+      setPending(
+        keepPending && keepPending.previewUrl
+          ? { ...keepPending, previewUrl: URL.createObjectURL(keepPending.file) }
+          : keepPending,
+      )
       alert("Impossible d'envoyer le message.")
     } finally {
       setSending(false)
@@ -833,12 +850,18 @@ function AddGroupModal({ profiles, onClose, onCreate }) {
   )
 }
 
-function MembersModal({ group, profiles, onClose, onSave }) {
+function MembersModal({ group, profiles, profile, onClose, onSave }) {
   const initial = (group.group_members || []).map((m) => m.user_id)
   const [selected, setSelected] = useState(new Set(initial))
   const [saving, setSaving] = useState(false)
 
+  // Un admin qui n'est ni owner ni créateur du groupe ne doit pas pouvoir se
+  // retirer lui-même : la visibilité étant liée à l'appartenance, il perdrait
+  // l'accès RLS au groupe qu'il gère.
+  const lockedSelf = profile.role !== 'owner' && group.created_by !== profile.id
+
   const toggle = (id) => {
+    if (lockedSelf && id === profile.id) return
     const next = new Set(selected)
     next.has(id) ? next.delete(id) : next.add(id)
     setSelected(next)
@@ -847,7 +870,9 @@ function MembersModal({ group, profiles, onClose, onSave }) {
   const save = async () => {
     setSaving(true)
     try {
-      await onSave([...selected])
+      const ids = new Set(selected)
+      if (lockedSelf) ids.add(profile.id)
+      await onSave([...ids])
     } finally {
       setSaving(false)
     }
@@ -857,7 +882,13 @@ function MembersModal({ group, profiles, onClose, onSave }) {
     <Modal onClose={onClose} title={`Membres · ${group.name}`}>
       <ul className="space-y-1.5 max-h-[55vh] overflow-y-auto -mx-1 px-1">
         {profiles.map((p) => (
-          <MemberToggle key={p.id} person={p} on={selected.has(p.id)} onToggle={() => toggle(p.id)} />
+          <MemberToggle
+            key={p.id}
+            person={p}
+            on={selected.has(p.id)}
+            onToggle={() => toggle(p.id)}
+            locked={lockedSelf && p.id === profile.id}
+          />
         ))}
       </ul>
       <button onClick={save} className="btn-primary w-full mt-4" disabled={saving}>
@@ -867,7 +898,7 @@ function MembersModal({ group, profiles, onClose, onSave }) {
   )
 }
 
-function MemberToggle({ person, on, onToggle }) {
+function MemberToggle({ person, on, onToggle, locked }) {
   const { isOnline, lastSeenAt } = usePresence()
   const online = isOnline(person.id)
   const label = presenceLabel(online, lastSeenAt(person.id))
@@ -888,6 +919,7 @@ function MemberToggle({ person, on, onToggle }) {
           </p>
           <p className="text-[11px] text-ink-400 truncate">
             {person.role}
+            {locked && <span className="ml-1.5 text-neon-cyan">· toi, tu restes membre</span>}
             {label && (
               <span className={classNames('ml-1.5', online && 'text-emerald-400')}>· {label}</span>
             )}

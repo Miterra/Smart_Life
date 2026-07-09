@@ -106,6 +106,16 @@ function detectDevice() {
   return 'Navigateur'
 }
 
+export async function getPushSubscription() {
+  if (!notificationsSupported()) return null
+  try {
+    const reg = await navigator.serviceWorker.ready
+    return await reg.pushManager.getSubscription()
+  } catch {
+    return null
+  }
+}
+
 export async function unsubscribePush() {
   const reg = await navigator.serviceWorker.ready
   const sub = await reg.pushManager.getSubscription()

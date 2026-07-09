@@ -16,6 +16,7 @@ import {
   enableNotifications,
   unsubscribePush,
   getPermissionStatus,
+  getPushSubscription,
   notificationsSupported,
   isIos,
   isStandalone,
@@ -29,6 +30,7 @@ import Avatar from '../components/Avatar'
 
 export default function Settings({ profile }) {
   const [perm, setPerm] = useState('default')
+  const [subscribed, setSubscribed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
   const [fullName, setFullName] = useState(profile.full_name || '')
@@ -41,6 +43,7 @@ export default function Settings({ profile }) {
 
   useEffect(() => {
     setPerm(getPermissionStatus())
+    getPushSubscription().then((sub) => setSubscribed(!!sub))
   }, [])
 
   useEffect(() => {
@@ -86,6 +89,7 @@ export default function Settings({ profile }) {
     setBusy(false)
     setPerm(getPermissionStatus())
     if (res.ok) {
+      setSubscribed(true)
       setMsg({ type: 'success', text: 'Notifications activées sur ce device.' })
     } else {
       setMsg({ type: 'error', text: res.error || 'Échec activation.' })
@@ -96,6 +100,7 @@ export default function Settings({ profile }) {
     setBusy(true)
     try {
       await unsubscribePush()
+      setSubscribed(false)
       setMsg({ type: 'success', text: 'Désabonné de ce device.' })
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
@@ -268,27 +273,27 @@ export default function Settings({ profile }) {
             <div>
               <p className="text-sm font-semibold text-white">Statut de ce device</p>
               <p className="text-[11px] text-ink-400">
-                {perm === 'granted'
-                  ? 'Autorisé — tu reçois les push.'
-                  : perm === 'denied'
+                {perm === 'denied'
                   ? 'Bloqué — réactive dans les paramètres système.'
+                  : perm === 'granted' && subscribed
+                  ? 'Autorisé — tu reçois les push.'
                   : 'Non activé.'}
               </p>
             </div>
             <span
               className={classNames(
                 'chip border',
-                perm === 'granted'
+                perm === 'granted' && subscribed
                   ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                   : 'bg-white/5 text-ink-300 border-white/10',
               )}
             >
-              {perm}
+              {perm === 'granted' && subscribed ? 'actif' : perm}
             </span>
           </div>
 
           <div className="flex flex-col gap-2">
-            {perm !== 'granted' && (
+            {!subscribed && (
               <button
                 onClick={activate}
                 disabled={busy || !supported || iosNeedsInstall}
@@ -297,7 +302,7 @@ export default function Settings({ profile }) {
                 <Bell className="w-4 h-4" /> {busy ? 'Activation…' : 'Activer sur ce device'}
               </button>
             )}
-            {perm === 'granted' && (
+            {subscribed && (
               <>
                 <button onClick={testNotif} className="btn-secondary w-full">
                   <Sparkles className="w-4 h-4" /> Tester une notification locale

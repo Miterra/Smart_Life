@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Mail, Lock, User as UserIcon, LogIn, UserPlus, AlertCircle } from 'lucide-react'
+import { Mail, Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { signIn, signUp } from '../lib/auth'
 
 export default function AuthGate() {
@@ -10,6 +10,7 @@ export default function AuthGate() {
   const [fullName, setFullName] = useState('')
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const [needsConfirm, setNeedsConfirm] = useState(false)
 
   const submit = async (e) => {
     e.preventDefault()
@@ -19,7 +20,11 @@ export default function AuthGate() {
       if (mode === 'signin') {
         await signIn(email, password)
       } else {
-        await signUp(email, password, fullName)
+        const data = await signUp(email, password, fullName)
+        // Confirmation email activée : pas de session, l'app ne bascule pas.
+        if (!data?.session) {
+          setNeedsConfirm(true)
+        }
       }
     } catch (err) {
       setError(err.message || 'Une erreur est survenue.')
@@ -60,6 +65,7 @@ export default function AuthGate() {
               placeholder="Nom complet"
               value={fullName}
               onChange={setFullName}
+              autoComplete="name"
               required
             />
           )}
@@ -69,6 +75,9 @@ export default function AuthGate() {
             placeholder="Email"
             value={email}
             onChange={setEmail}
+            autoComplete="email"
+            inputMode="email"
+            autoCapitalize="none"
             required
           />
           <Field
@@ -77,6 +86,7 @@ export default function AuthGate() {
             placeholder="Mot de passe"
             value={password}
             onChange={setPassword}
+            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
             required
             minLength={6}
           />
@@ -85,6 +95,13 @@ export default function AuthGate() {
             <div className="flex items-start gap-2 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-200 text-sm">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {needsConfirm && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>Compte créé — vérifie tes emails pour confirmer ton adresse.</span>
             </div>
           )}
 
@@ -103,6 +120,7 @@ export default function AuthGate() {
           onClick={() => {
             setMode(mode === 'signin' ? 'signup' : 'signin')
             setError('')
+            setNeedsConfirm(false)
           }}
           className="w-full mt-4 text-xs text-ink-300 hover:text-white transition"
         >
@@ -115,17 +133,21 @@ export default function AuthGate() {
   )
 }
 
-function Field({ icon: Icon, type, placeholder, value, onChange, required, minLength }) {
+function Field({ icon: Icon, type, placeholder, value, onChange, required, minLength, autoComplete, inputMode, autoCapitalize }) {
   return (
     <div className="relative">
       <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400 pointer-events-none" />
       <input
         type={type}
         placeholder={placeholder}
+        aria-label={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
         minLength={minLength}
+        autoComplete={autoComplete}
+        inputMode={inputMode}
+        autoCapitalize={autoCapitalize}
         className="input pl-10"
       />
     </div>

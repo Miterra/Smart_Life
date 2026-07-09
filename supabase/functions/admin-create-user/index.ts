@@ -63,6 +63,13 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'email and password required' }, 400)
     }
 
+    // Valide le rôle demandé contre l'enum autorisé (évite un faux succès si
+    // une valeur invalide viole la contrainte CHECK role in (...) côté DB).
+    const ALLOWED_ROLES = ['owner', 'admin', 'manager', 'user']
+    if (body.role && !ALLOWED_ROLES.includes(body.role)) {
+      return json({ error: 'invalid role' }, 400)
+    }
+
     // Seul le owner peut créer un autre admin / owner
     let targetRole = body.role || 'user'
     if (caller.role === 'admin' && (targetRole === 'admin' || targetRole === 'owner')) {
@@ -83,16 +90,30 @@ Deno.serve(async (req: Request) => {
     // Le trigger handle_new_user créera le profil avec role par défaut = 'user'
     // (sauf si c'est le tout premier compte → owner).
     // On force le rôle souhaité ici.
+    let roleErr = null
     if (targetRole !== 'user') {
-      await admin
+      const { error } = await admin
         .from('profiles')
         .update({ role: targetRole, full_name: body.full_name || '' })
         .eq('id', created.user.id)
+      roleErr = error
     } else if (body.full_name) {
-      await admin
+      const { error } = await admin
         .from('profiles')
         .update({ full_name: body.full_name })
         .eq('id', created.user.id)
+      roleErr = error
+    }
+    if (roleErr) {
+      // Le compte a bien été créé, mais l'application du rôle/nom a échoué
+      // (ex. contrainte DB). On le signale honnêtement au lieu d'un faux succès.
+      return json(
+        {
+          error: `Compte créé, mais rôle non appliqué : ${roleErr.message}`,
+          user: { id: created.user.id, email: created.user.email, role: 'user' },
+        },
+        500,
+      )
     }
 
     return json({ ok: true, user: { id: created.user.id, email: created.user.email, role: targetRole } })

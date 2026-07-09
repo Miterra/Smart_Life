@@ -9,3 +9,6 @@ dev-dist
 .vite
 
 .vercel
+
+# Outillage local Claude Code (skills/agents installés) — hors app
+.claude

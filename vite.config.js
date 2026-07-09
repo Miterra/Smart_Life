@@ -23,7 +23,7 @@ export default defineConfig({
         name: 'Smart Life Dashboard',
         short_name: 'Smart Life',
         description: 'Dashboard mobile-first pour gérer tâches, rendez-vous, groupes et finances.',
-        theme_color: '#0b0f1a',
+        theme_color: '#05070d',
         background_color: '#05070d',
         display: 'standalone',
         orientation: 'portrait',

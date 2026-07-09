@@ -47,8 +47,14 @@ export default function Dashboard({ profile }) {
 
   const todayTasks = useMemo(() => {
     const today = new Date().toDateString()
-    return tasks.filter((t) => t.due_at && new Date(t.due_at).toDateString() === today)
-  }, [tasks])
+    return tasks.filter(
+      (t) =>
+        t.assigned_to === profile.id &&
+        t.status !== 'done' &&
+        t.due_at &&
+        new Date(t.due_at).toDateString() === today,
+    )
+  }, [tasks, profile.id])
 
   const myTasks = useMemo(
     () => tasks.filter((t) => t.assigned_to === profile.id && t.status !== 'done'),
@@ -72,7 +78,7 @@ export default function Dashboard({ profile }) {
 
       <div className="grid grid-cols-2 gap-3">
         <ProductivityCard score={productivityScore} />
-        <StatsCard tasks={tasks} myTasks={myTasks} />
+        <StatsCard tasks={tasks} myTasks={myTasks} profile={profile} />
       </div>
 
       <Section
@@ -119,7 +125,9 @@ export default function Dashboard({ profile }) {
       </Section>
 
       <Section title="Insights" icon={Sparkles}>
-        {insights.length === 0 ? (
+        {loading ? (
+          <SkeletonList />
+        ) : insights.length === 0 ? (
           <Empty label="Pas encore d'insights. Crée une tâche pour démarrer." />
         ) : (
           <div className="space-y-2">
@@ -153,7 +161,11 @@ function Greeting({ profile }) {
 
 function PushBanner() {
   const [perm, setPerm] = useState('default')
-  const [dismissed, setDismissed] = useState(false)
+  const [dismissed, setDismissed] = useState(() => {
+    const at = localStorage.getItem('pushBannerDismissedAt')
+    if (!at) return false
+    return Date.now() - new Date(at).getTime() < 7 * 86400000
+  })
   useEffect(() => {
     setPerm(getPermissionStatus())
   }, [])
@@ -189,7 +201,14 @@ function PushBanner() {
             </Link>
           )}
         </div>
-        <button onClick={() => setDismissed(true)} className="text-ink-400 hover:text-white text-xs">
+        <button
+          onClick={() => {
+            localStorage.setItem('pushBannerDismissedAt', new Date().toISOString())
+            setDismissed(true)
+          }}
+          aria-label="Fermer"
+          className="text-ink-400 hover:text-white text-xs"
+        >
           ✕
         </button>
       </div>
@@ -226,8 +245,8 @@ function ProductivityCard({ score }) {
   )
 }
 
-function StatsCard({ tasks, myTasks }) {
-  const done = tasks.filter((t) => t.status === 'done').length
+function StatsCard({ tasks, myTasks, profile }) {
+  const done = tasks.filter((t) => t.assigned_to === profile.id && t.status === 'done').length
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}

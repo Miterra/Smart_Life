@@ -79,8 +79,10 @@ export default function Calendar({ profile }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [rdvForm, setRdvForm] = useState(null) // {initial} | null
   const [periodForm, setPeriodForm] = useState(null)
+  const [loadErr, setLoadErr] = useState('')
 
   const refresh = async () => {
+    setLoadErr('')
     try {
       const [t, a, pr, pf, g] = await Promise.all([
         listTasks(),
@@ -94,8 +96,10 @@ export default function Calendar({ profile }) {
       setPeriods(pr)
       setProfiles(pf)
       setGroups(g)
+      setLoadErr('')
     } catch (e) {
       console.error(e)
+      setLoadErr('Impossible de charger l’agenda.')
     }
   }
 
@@ -159,7 +163,11 @@ export default function Calendar({ profile }) {
           </p>
         </div>
         <div className="flex items-center gap-1">
-          <button className="btn-ghost p-2" onClick={() => setMonth(addMonths(month, -1))}>
+          <button
+            aria-label="Mois précédent"
+            className="btn-ghost p-2"
+            onClick={() => setMonth(addMonths(month, -1))}
+          >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
@@ -171,12 +179,20 @@ export default function Calendar({ profile }) {
           >
             Auj.
           </button>
-          <button className="btn-ghost p-2" onClick={() => setMonth(addMonths(month, 1))}>
+          <button
+            aria-label="Mois suivant"
+            className="btn-ghost p-2"
+            onClick={() => setMonth(addMonths(month, 1))}
+          >
             <ChevronRight className="w-4 h-4" />
           </button>
           {(canRdv || canPeriod) && (
             <div className="relative">
-              <button onClick={() => setMenuOpen((o) => !o)} className="btn-primary ml-1 px-3">
+              <button
+                aria-label="Ajouter un rendez-vous"
+                onClick={() => setMenuOpen((o) => !o)}
+                className="btn-primary ml-1 px-3"
+              >
                 <Plus className="w-4 h-4" />
               </button>
               <AnimatePresence>
@@ -230,6 +246,27 @@ export default function Calendar({ profile }) {
                 {p.title}
               </button>
             ))}
+        </div>
+      )}
+
+      {loadErr && (
+        <div className="card p-3 flex items-center justify-between gap-3 border-l-2 border-neon-rose">
+          <p className="text-xs text-rose-300">{loadErr}</p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={refresh}
+              className="text-[10px] uppercase tracking-widest text-neon-cyan font-bold px-2"
+            >
+              Réessayer
+            </button>
+            <button
+              onClick={() => setLoadErr('')}
+              aria-label="Masquer l’erreur"
+              className="text-ink-400 hover:text-white p-1"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -385,12 +422,20 @@ function RdvRow({ rdv, profile, profiles, onEdit, onChange }) {
           <p className="text-sm font-medium text-white">{rdv.title}</p>
           <div className="flex items-center gap-1">
             {canEdit && (
-              <button onClick={onEdit} className="text-ink-400 hover:text-white p-1">
+              <button
+                aria-label="Modifier le rendez-vous"
+                onClick={onEdit}
+                className="text-ink-400 hover:text-white p-1"
+              >
                 <Edit3 className="w-3.5 h-3.5" />
               </button>
             )}
             {canDel && (
-              <button onClick={remove} className="text-ink-400 hover:text-rose-400 p-1">
+              <button
+                aria-label="Supprimer le rendez-vous"
+                onClick={remove}
+                className="text-ink-400 hover:text-rose-400 p-1"
+              >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
@@ -465,6 +510,10 @@ function RdvForm({ initial, defaultStart, profile, profiles, groups, onClose, on
 
   const submit = async (e) => {
     e.preventDefault()
+    if (endAt && new Date(endAt) < new Date(startAt)) {
+      setErr("L'heure de fin doit être après l'heure de début.")
+      return
+    }
     setSaving(true)
     setErr('')
     try {
