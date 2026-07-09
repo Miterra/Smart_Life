@@ -161,6 +161,19 @@ export async function listPresence() {
   return data
 }
 
+/**
+ * Signale le groupe de chat actuellement ouvert à l'écran (ou null).
+ * L'edge function notify-message n'envoie pas de push de message au membre
+ * qui regarde déjà cette conversation. Fire-and-forget.
+ */
+export async function setViewingGroup(groupId) {
+  try {
+    await supabase.rpc('set_viewing_group', { gid: groupId ?? null })
+  } catch (e) {
+    console.warn('[viewing] set failed', e)
+  }
+}
+
 /* ---------- Catégories de personnes ---------- */
 export async function listCategories() {
   const { data, error } = await supabase
@@ -418,6 +431,24 @@ export async function sendMessage(groupId, userId, body, attachment = null) {
   const { data, error } = await supabase.from('messages').insert(row).select().single()
   if (error) throw error
   return data
+}
+
+/** Modifie le corps d'un de ses messages (RLS : auteur uniquement ; edited_at auto). */
+export async function updateMessage(id, body) {
+  const { data, error } = await supabase
+    .from('messages')
+    .update({ body })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+/** Supprime un message (RLS : auteur ou owner). */
+export async function deleteMessage(id) {
+  const { error } = await supabase.from('messages').delete().eq('id', id)
+  if (error) throw error
 }
 
 /** Ajoute/retire une réaction emoji de l'utilisateur courant. Renvoie true si ajoutée. */

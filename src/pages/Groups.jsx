@@ -30,11 +30,14 @@ import {
   listProfiles,
   listMessages,
   sendMessage,
+  updateMessage,
+  deleteMessage,
   uploadChatFile,
   toggleReaction,
   listMutes,
   muteGroup,
   unmuteGroup,
+  setViewingGroup,
   subscribeRealtime,
 } from '../lib/repository'
 import { canManageGroups } from '../lib/roles'
@@ -331,6 +334,8 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [pending, setPending] = useState(null) // { file, name, type, previewUrl }
+  const [menuMsg, setMenuMsg] = useState(null) // message sur lequel agir (appui long / clic droit)
+  const [editing, setEditing] = useState(null) // { id, body } en cours d'édition
   const scrollRef = useRef(null)
   const fileRef = useRef(null)
   const { isOnline } = usePresence()
@@ -356,6 +361,19 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
     const sub = subscribeRealtime(['messages', 'message_reactions'], load)
     return () => sub.unsubscribe()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group.id])
+
+  // Signale qu'on regarde CE groupe : tant qu'il est ouvert et visible, on ne
+  // reçoit pas de notification push pour ses messages (inutile, on les lit).
+  // On efface l'état en arrière-plan/fermeture pour que les notifs reprennent.
+  useEffect(() => {
+    const apply = () => setViewingGroup(document.visibilityState === 'visible' ? group.id : null)
+    apply()
+    document.addEventListener('visibilitychange', apply)
+    return () => {
+      document.removeEventListener('visibilitychange', apply)
+      setViewingGroup(null)
+    }
   }, [group.id])
 
   useEffect(() => {
@@ -392,9 +410,51 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
     })
   }
 
+  const startEdit = (msg) => {
+    setMenuMsg(null)
+    if (pending) setPending(null)
+    setEditing({ id: msg.id, body: msg.body || '' })
+    setBody(msg.body || '')
+  }
+
+  const cancelEdit = () => {
+    setEditing(null)
+    setBody('')
+  }
+
+  const removeMessage = async (msg) => {
+    setMenuMsg(null)
+    if (!confirm('Supprimer ce message ?')) return
+    setMessages((cur) => cur.filter((x) => x.id !== msg.id)) // optimiste
+    try {
+      await deleteMessage(msg.id)
+    } catch (e2) {
+      console.error(e2)
+      alert('Impossible de supprimer le message.')
+      load()
+    }
+  }
+
   const send = async (e) => {
     e.preventDefault()
     const text = body.trim()
+    // Mode édition : on met à jour le corps du message existant.
+    if (editing) {
+      if (!text) return
+      const id = editing.id
+      const stamp = new Date().toISOString()
+      setEditing(null)
+      setBody('')
+      setMessages((cur) => cur.map((x) => (x.id === id ? { ...x, body: text, edited_at: stamp } : x)))
+      try {
+        await updateMessage(id, text)
+      } catch (e2) {
+        console.error(e2)
+        alert('Impossible de modifier le message.')
+        load()
+      }
+      return
+    }
     if (!text && !pending) return
     const keepBody = body
     const keepPending = pending
@@ -516,6 +576,7 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
                   showAuthor={showAuthor}
                   myId={profile.id}
                   onReact={react}
+                  onMenu={mine ? setMenuMsg : undefined}
                 />
               </div>
             )
@@ -539,6 +600,21 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
         </div>
       )}
 
+      {editing && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-neon-cyan/10 border border-neon-cyan/30">
+          <Pencil className="w-3.5 h-3.5 text-neon-cyan flex-shrink-0" />
+          <span className="flex-1 min-w-0 text-xs text-ink-200">Modification du message</span>
+          <button
+            type="button"
+            onClick={cancelEdit}
+            className="btn-ghost p-1"
+            title="Annuler la modification"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <form onSubmit={send} className="flex items-center gap-2">
         <input
           ref={fileRef}
@@ -547,37 +623,68 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
           className="hidden"
           onChange={onPickFile}
         />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="btn-ghost p-2.5 flex-shrink-0"
-          title="Joindre une image ou un PDF"
-        >
-          <Paperclip className="w-5 h-5" />
-        </button>
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="btn-ghost p-2.5 flex-shrink-0"
+            title="Joindre une image ou un PDF"
+          >
+            <Paperclip className="w-5 h-5" />
+          </button>
+        )}
         <input
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder="Écris un message…"
+          placeholder={editing ? 'Modifier le message…' : 'Écris un message…'}
           className="input flex-1"
           maxLength={2000}
         />
         <button
           type="submit"
-          disabled={sending || (!body.trim() && !pending)}
+          disabled={sending || (editing ? !body.trim() : !body.trim() && !pending)}
           className="btn-primary px-3.5 py-2.5 disabled:opacity-40 flex-shrink-0"
-          title="Envoyer"
+          title={editing ? 'Enregistrer' : 'Envoyer'}
         >
-          <Send className="w-4 h-4" />
+          {editing ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
         </button>
       </form>
+
+      <AnimatePresence>
+        {menuMsg && (
+          <MessageActionSheet
+            canEdit={!!(menuMsg.body && menuMsg.body.trim())}
+            onEdit={() => startEdit(menuMsg)}
+            onDelete={() => removeMessage(menuMsg)}
+            onClose={() => setMenuMsg(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
 
-function Bubble({ m, mine, author, showAuthor, myId, onReact }) {
+function Bubble({ m, mine, author, showAuthor, myId, onReact, onMenu }) {
   const name = author?.full_name || author?.email || 'Inconnu'
   const color = author?.avatar_color || colorFor(m.user_id)
+  const pressTimer = useRef(null)
+
+  // Appui long (mobile) / clic droit (PC) → menu d'actions (modifier / supprimer).
+  const openMenu = (e) => {
+    if (!onMenu) return
+    e.preventDefault()
+    onMenu(m)
+  }
+  const startPress = () => {
+    if (!onMenu) return
+    pressTimer.current = setTimeout(() => onMenu(m), 500)
+  }
+  const cancelPress = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current)
+      pressTimer.current = null
+    }
+  }
 
   // Agrège les réactions par emoji : { emoji, count, mine }.
   const reactions = useMemo(() => {
@@ -603,8 +710,14 @@ function Bubble({ m, mine, author, showAuthor, myId, onReact }) {
       )}
       <div className={classNames('flex items-center gap-1', mine ? 'flex-row-reverse' : 'flex-row')}>
         <div
+          onContextMenu={openMenu}
+          onTouchStart={startPress}
+          onTouchEnd={cancelPress}
+          onTouchMove={cancelPress}
+          onTouchCancel={cancelPress}
           className={classNames(
             'max-w-[80%] rounded-2xl text-sm leading-snug overflow-hidden',
+            onMenu && 'cursor-pointer select-none',
             mine ? 'bg-neon-cyan/20 text-white rounded-br-md' : 'bg-white/5 text-ink-100 rounded-bl-md',
           )}
         >
@@ -637,6 +750,7 @@ function Bubble({ m, mine, author, showAuthor, myId, onReact }) {
 
       <span className="text-[9px] text-ink-500 mt-0.5 mx-1">
         {format(new Date(m.created_at), 'HH:mm')}
+        {m.edited_at && ' · modifié'}
       </span>
     </div>
   )
@@ -1015,6 +1129,24 @@ function GroupPhotoField({ group, photo, onPick }) {
       </div>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onChange} />
     </div>
+  )
+}
+
+/** Feuille d'actions sur un de ses messages (appui long / clic droit). */
+function MessageActionSheet({ canEdit, onEdit, onDelete, onClose }) {
+  return (
+    <Modal onClose={onClose} title="Ton message">
+      <div className="space-y-2">
+        {canEdit && (
+          <button onClick={onEdit} className="btn-secondary w-full">
+            <Pencil className="w-4 h-4" /> Modifier
+          </button>
+        )}
+        <button onClick={onDelete} className="btn-secondary w-full text-rose-300">
+          <Trash2 className="w-4 h-4" /> Supprimer
+        </button>
+      </div>
+    </Modal>
   )
 }
 

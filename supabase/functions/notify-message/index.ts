@@ -9,6 +9,7 @@
 //    - l'expéditeur
 //    - ceux dont push_enabled = false
 //    - ceux qui ont mute le groupe OU l'expéditeur (table public.mutes)
+//    - ceux qui regardent déjà la conversation (viewing_group_id récent)
 //
 //  Garde-fou : on ignore les messages de plus de 2 min (anti-rejeu),
 //  et le tag de notif = group-<id> pour regrouper les messages.
@@ -212,14 +213,27 @@ Deno.serve(async (req: Request) => {
     targetIds = targetIds.filter((id) => !mutedSet.has(id))
     if (targetIds.length === 0) return json({ ok: true, recipients: 0, allMuted: true })
 
-    // 5) push_enabled = true
+    // 5) push_enabled = true, en excluant ceux qui REGARDENT déjà ce groupe
+    //    (app ouverte sur la conversation → notifier ne sert à rien). La
+    //    fraîcheur (last_seen < 60 s) évite qu'une app tuée/en arrière-plan
+    //    supprime les notifs indéfiniment.
     const { data: profs } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, viewing_group_id, last_seen')
       .in('id', targetIds)
       .eq('push_enabled', true)
-    const allowed = (profs || []).map((p) => p.id as string)
-    if (allowed.length === 0) return json({ ok: true, recipients: 0 })
+    const VIEWING_FRESH_MS = 60_000
+    const nowMs = Date.now()
+    const allowed = (profs || [])
+      .filter((p) => {
+        const viewing =
+          p.viewing_group_id === msg.group_id &&
+          p.last_seen &&
+          nowMs - new Date(p.last_seen as string).getTime() < VIEWING_FRESH_MS
+        return !viewing
+      })
+      .map((p) => p.id as string)
+    if (allowed.length === 0) return json({ ok: true, recipients: 0, allViewingOrDisabled: true })
 
     // 6) Subscriptions
     const { data: subs } = await supabase
