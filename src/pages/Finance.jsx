@@ -170,7 +170,7 @@ export default function Finance({ profile, myCategoryCount = 0 }) {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-3 gap-2.5 lg:gap-4">
         <StatCard label="Entrées" value={totals.inSum} icon={TrendingUp} tone="emerald" />
         <StatCard label="Sorties" value={totals.outSum} icon={TrendingDown} tone="rose" />
         <StatCard label="Solde" value={totals.net} icon={Wallet} tone="cyan" signed />
@@ -228,6 +228,8 @@ export default function Finance({ profile, myCategoryCount = 0 }) {
             </div>
           )}
 
+          {/* PC : les deux graphiques côte à côte. */}
+          <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start">
           {/* Bar chart : entrées vs sorties par mois */}
           <div className="card p-4">
             <p className="text-[10px] uppercase tracking-widest text-ink-400 mb-3">
@@ -282,13 +284,14 @@ export default function Finance({ profile, myCategoryCount = 0 }) {
               </AreaChart>
             </ResponsiveContainer>
           </div>
+          </div>
 
           {/* Liste des opérations */}
           <div>
             <p className="text-[10px] uppercase tracking-widest text-ink-400 mb-2 px-1">
               Dernières opérations
             </p>
-            <ul className="space-y-2">
+            <ul className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3 lg:items-start">
               {[...rows].reverse().slice(0, 30).map((r) => (
                 <FinanceRow
                   key={r.id}

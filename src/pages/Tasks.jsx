@@ -163,7 +163,7 @@ export default function Tasks({ profile }) {
           )}
         </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3 lg:items-start">
           <AnimatePresence initial={false}>
             {filtered.map((t) => (
               <TaskRow

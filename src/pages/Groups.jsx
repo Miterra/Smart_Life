@@ -19,6 +19,7 @@ import {
   Download,
   Smile,
   Camera,
+  Copy,
 } from 'lucide-react'
 import {
   listGroups,
@@ -268,7 +269,7 @@ function ListView({ groups, profiles, loading, canManage, profile, mutedGroups, 
           )}
         </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3 lg:items-start">
           {groups.map((g) => (
             <GroupRow
               key={g.id}
@@ -410,6 +411,40 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
     })
   }
 
+  // N'ouvre le menu que s'il y a au moins une action possible (copier le
+  // texte, ou modifier/supprimer si c'est le sien — le owner peut supprimer).
+  // Renvoie true si le menu s'ouvre, pour que la bulle ne bloque le
+  // comportement natif (clic droit) que dans ce cas.
+  const openMsgMenu = (m) => {
+    const mine = m.user_id === profile.id
+    const hasText = !!(m.body && m.body.trim())
+    if (!hasText && !mine && profile.role !== 'owner') return false
+    setMenuMsg(m)
+    return true
+  }
+
+  const copyMessage = async (msg) => {
+    setMenuMsg(null)
+    const text = msg.body || ''
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      // Fallback (anciens navigateurs) : textarea temporaire + execCommand.
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try {
+        document.execCommand('copy')
+      } catch {
+        /* ignore */
+      }
+      document.body.removeChild(ta)
+    }
+  }
+
   const startEdit = (msg) => {
     setMenuMsg(null)
     if (pending) setPending(null)
@@ -506,7 +541,8 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
   }
 
   return (
-    <div className="space-y-3">
+    // PC : largeur de lecture confortable + fenêtre de chat plus haute.
+    <div className="space-y-3 lg:max-w-3xl lg:mx-auto">
       <div className="flex items-center gap-2">
         <button onClick={onBack} className="btn-ghost p-2" title="Retour">
           <ChevronLeft className="w-5 h-5" />
@@ -550,7 +586,7 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
 
       <div
         ref={scrollRef}
-        className="card p-3 h-[56vh] overflow-y-auto flex flex-col gap-1.5 scroll-smooth"
+        className="card p-3 h-[56vh] lg:h-[64vh] overflow-y-auto flex flex-col gap-1.5 scroll-smooth"
       >
         {loading ? (
           <div className="m-auto text-ink-400 text-sm">Chargement…</div>
@@ -576,7 +612,7 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
                   showAuthor={showAuthor}
                   myId={profile.id}
                   onReact={react}
-                  onMenu={mine ? setMenuMsg : undefined}
+                  onMenu={openMsgMenu}
                 />
               </div>
             )
@@ -653,7 +689,11 @@ function ChatView({ group, profile, profileMap, canManage, muted, onToggleMute, 
       <AnimatePresence>
         {menuMsg && (
           <MessageActionSheet
-            canEdit={!!(menuMsg.body && menuMsg.body.trim())}
+            mine={menuMsg.user_id === profile.id}
+            canCopy={!!(menuMsg.body && menuMsg.body.trim())}
+            canEdit={menuMsg.user_id === profile.id && !!(menuMsg.body && menuMsg.body.trim())}
+            canDelete={menuMsg.user_id === profile.id || profile.role === 'owner'}
+            onCopy={() => copyMessage(menuMsg)}
             onEdit={() => startEdit(menuMsg)}
             onDelete={() => removeMessage(menuMsg)}
             onClose={() => setMenuMsg(null)}
@@ -669,11 +709,12 @@ function Bubble({ m, mine, author, showAuthor, myId, onReact, onMenu }) {
   const color = author?.avatar_color || colorFor(m.user_id)
   const pressTimer = useRef(null)
 
-  // Appui long (mobile) / clic droit (PC) → menu d'actions (modifier / supprimer).
+  // Appui long (mobile) / clic droit (PC) → menu d'actions (copier / modifier /
+  // supprimer). On ne bloque le menu contextuel natif que si le nôtre s'ouvre
+  // (sinon « Enregistrer l'image sous » resterait inaccessible).
   const openMenu = (e) => {
     if (!onMenu) return
-    e.preventDefault()
-    onMenu(m)
+    if (onMenu(m)) e.preventDefault()
   }
   const startPress = () => {
     if (!onMenu) return
@@ -717,7 +758,9 @@ function Bubble({ m, mine, author, showAuthor, myId, onReact, onMenu }) {
           onTouchCancel={cancelPress}
           className={classNames(
             'max-w-[80%] rounded-2xl text-sm leading-snug overflow-hidden',
-            onMenu && 'cursor-pointer select-none',
+            // select-none : évite la sélection pendant l'appui long (mobile) ;
+            // sur PC le menu passe par clic droit, on garde la sélection de texte.
+            onMenu && 'cursor-pointer select-none lg:select-auto',
             mine ? 'bg-neon-cyan/20 text-white rounded-br-md' : 'bg-white/5 text-ink-100 rounded-bl-md',
           )}
         >
@@ -1132,19 +1175,26 @@ function GroupPhotoField({ group, photo, onPick }) {
   )
 }
 
-/** Feuille d'actions sur un de ses messages (appui long / clic droit). */
-function MessageActionSheet({ canEdit, onEdit, onDelete, onClose }) {
+/** Feuille d'actions sur un message (appui long / clic droit). */
+function MessageActionSheet({ mine, canCopy, canEdit, canDelete, onCopy, onEdit, onDelete, onClose }) {
   return (
-    <Modal onClose={onClose} title="Ton message">
+    <Modal onClose={onClose} title={mine ? 'Ton message' : 'Message'}>
       <div className="space-y-2">
+        {canCopy && (
+          <button onClick={onCopy} className="btn-secondary w-full">
+            <Copy className="w-4 h-4" /> Copier
+          </button>
+        )}
         {canEdit && (
           <button onClick={onEdit} className="btn-secondary w-full">
             <Pencil className="w-4 h-4" /> Modifier
           </button>
         )}
-        <button onClick={onDelete} className="btn-secondary w-full text-rose-300">
-          <Trash2 className="w-4 h-4" /> Supprimer
-        </button>
+        {canDelete && (
+          <button onClick={onDelete} className="btn-secondary w-full text-rose-300">
+            <Trash2 className="w-4 h-4" /> Supprimer
+          </button>
+        )}
       </div>
     </Modal>
   )

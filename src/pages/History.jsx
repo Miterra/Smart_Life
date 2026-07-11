@@ -100,7 +100,7 @@ export default function History({ profile }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 lg:max-w-3xl lg:mx-auto">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="heading text-2xl">Historique</h1>

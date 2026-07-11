@@ -76,11 +76,13 @@ export default function Dashboard({ profile }) {
 
       <Greeting profile={profile} />
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:gap-4">
         <ProductivityCard score={productivityScore} />
         <StatsCard tasks={tasks} myTasks={myTasks} profile={profile} />
       </div>
 
+      {/* PC : tâches du jour et prochains RDV côte à côte. */}
+      <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-5 lg:items-start">
       <Section
         title="Mes tâches aujourd'hui"
         action={
@@ -123,6 +125,7 @@ export default function Dashboard({ profile }) {
           </div>
         )}
       </Section>
+      </div>
 
       <Section title="Insights" icon={Sparkles}>
         {loading ? (

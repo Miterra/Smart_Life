@@ -242,7 +242,7 @@ export default function People({ profile }) {
           ))}
         </div>
       ) : tab === 'people' ? (
-        <ul className="space-y-2">
+        <ul className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3 lg:items-start">
           <AnimatePresence initial={false}>
             {people.map((p) => (
               <PersonRow
@@ -266,7 +266,7 @@ export default function People({ profile }) {
           </button>
         </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3 lg:items-start">
           <AnimatePresence initial={false}>
             {categories.map((c) => (
               <CategoryRow

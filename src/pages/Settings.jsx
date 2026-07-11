@@ -137,7 +137,7 @@ export default function Settings({ profile }) {
   const iosNeedsInstall = ios && !standalone
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 lg:max-w-2xl lg:mx-auto">
       <div>
         <h1 className="heading text-2xl">Paramètres</h1>
         <p className="text-xs text-ink-400 mt-1">Notifications, profil, déconnexion.</p>

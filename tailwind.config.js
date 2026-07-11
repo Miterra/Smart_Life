@@ -13,6 +13,11 @@ export default {
           500: '#3a4666',
           400: '#5d6a8a',
           300: '#8d97b3',
+          // 100/200 étaient utilisées dans le code sans être définies
+          // (aucun CSS généré) : les bulles/textes retombaient sur la
+          // couleur héritée. Déclarées pour que text-ink-100/200 existent.
+          200: '#c3c9dd',
+          100: '#dde1ee',
         },
         neon: {
           cyan: '#22d3ee',

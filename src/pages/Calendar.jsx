@@ -270,7 +270,9 @@ export default function Calendar({ profile }) {
         </div>
       )}
 
-      <div className="card p-3">
+      {/* PC : grille du mois à gauche, détail du jour à droite (sticky). */}
+      <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-5 lg:items-start">
+      <div className="card p-3 lg:p-4">
         <div className="grid grid-cols-7 gap-0.5 mb-1.5 text-[10px] uppercase tracking-widest text-ink-400 text-center">
           {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d) => (
             <div key={d} className="py-1">
@@ -329,7 +331,7 @@ export default function Calendar({ profile }) {
       </div>
 
       {/* Détail du jour */}
-      <div className="space-y-3">
+      <div className="space-y-3 lg:sticky lg:top-8">
         <div className="flex items-center gap-2 px-1">
           <CalIcon className="w-4 h-4 text-neon-cyan" />
           <h2 className="heading text-sm font-bold uppercase tracking-wider capitalize">
@@ -366,10 +368,11 @@ export default function Calendar({ profile }) {
               />
             ))}
             {selTasks.map((t) => (
-              <DayTask key={t.id} task={t} />
+              <DayTask key={t.id} task={t} profiles={profiles} />
             ))}
           </ul>
         )}
+      </div>
       </div>
 
       <AnimatePresence>
@@ -470,17 +473,31 @@ function RdvRow({ rdv, profile, profiles, onEdit, onChange }) {
   )
 }
 
-function DayTask({ task }) {
+function DayTask({ task, profiles }) {
+  const assignee = (profiles || []).find((p) => p.id === task.assigned_to)
   return (
     <li className="card p-3 flex items-start gap-3">
       <div className={classNames('w-1 self-stretch rounded-full', priorityDot(task.priority))} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-white">{task.title}</p>
         {task.description && <p className="text-xs text-ink-300 mt-1">{task.description}</p>}
-        <div className="flex items-center gap-2 mt-1.5 text-xs text-ink-400">
-          <Clock className="w-3 h-3" />
-          {task.due_at ? format(new Date(task.due_at), 'HH:mm') : ''}
-          <span className="chip border bg-white/5 border-white/10 ml-1">Tâche</span>
+        <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-ink-400">
+          <span className="flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            {task.due_at ? format(new Date(task.due_at), 'HH:mm') : ''}
+          </span>
+          <span className="chip border bg-white/5 border-white/10">Tâche</span>
+          {assignee && (
+            <span className="flex items-center gap-1">
+              <span
+                className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center text-[8px] font-bold text-ink-950"
+                style={{ background: assignee.avatar_color || colorFor(assignee.id) }}
+              >
+                {initialsFor(assignee.full_name || assignee.email)}
+              </span>
+              {(assignee.full_name || assignee.email || '').split(' ')[0]}
+            </span>
+          )}
         </div>
       </div>
     </li>

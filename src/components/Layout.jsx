@@ -31,10 +31,63 @@ export default function Layout({ profile, financeEnabled = false, children }) {
     ? [...TABS, { to: '/finance', label: 'Finance', icon: Wallet }]
     : TABS
 
+  // Liens secondaires : icônes du header sur mobile, bas de la sidebar sur PC.
+  const secondary = [
+    ...(isAdmin ? [{ to: '/history', label: 'Historique', icon: HistoryIcon }] : []),
+    ...(showPeople ? [{ to: '/people', label: 'Personnes', icon: Users }] : []),
+    { to: '/settings', label: 'Paramètres', icon: SettingsIcon },
+  ]
+
   return (
-    <div className="min-h-screen flex flex-col pb-24">
-      {/* Top bar */}
-      <header className="sticky top-0 z-30 pt-safe">
+    <div className="min-h-screen flex flex-col pb-24 lg:pb-0 lg:pl-64">
+      {/* Sidebar (PC / grand écran) */}
+      <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-64 z-40 glass-strong border-r border-white/5 p-4">
+        <Link to="/" className="flex items-center gap-2.5 px-2 py-1.5 mb-6">
+          <div className="relative">
+            <div className="absolute inset-0 bg-neon-magenta/40 blur-md rounded-xl" />
+            <img src="/icon.svg" alt="Smart Life" className="relative w-9 h-9 rounded-xl" />
+          </div>
+          <div>
+            <div className="heading text-sm font-bold leading-tight">Smart Life</div>
+            <div className="text-[10px] uppercase tracking-widest text-ink-400 leading-tight">
+              Dashboard
+            </div>
+          </div>
+        </Link>
+
+        <nav className="flex-1 space-y-1 overflow-y-auto">
+          {tabs.map((t) => (
+            <SideLink key={t.to} {...t} end={t.to === '/'} />
+          ))}
+          <div className="h-px bg-white/5 my-3" />
+          {secondary.map((t) => (
+            <SideLink key={t.to} {...t} />
+          ))}
+        </nav>
+
+        <div className="mt-4 pt-4 border-t border-white/5 flex items-center gap-2.5">
+          <Avatar profile={profile} size={36} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white truncate">
+              {profile?.full_name || profile?.email}
+            </p>
+            <p className="text-[10px] uppercase tracking-widest text-ink-400">
+              {ROLE_LABELS[profile?.role || 'user']}
+            </p>
+          </div>
+          <motion.button
+            onClick={signOut}
+            whileTap={{ scale: 0.85 }}
+            className="btn-ghost p-2"
+            title="Déconnexion"
+          >
+            <LogOut className="w-4 h-4" />
+          </motion.button>
+        </div>
+      </aside>
+
+      {/* Top bar (mobile / tablette) */}
+      <header className="sticky top-0 z-30 pt-safe lg:hidden">
         <div className="glass-strong border-b border-white/5">
           <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
             <Link to="/" className="flex items-center gap-2.5">
@@ -72,7 +125,7 @@ export default function Layout({ profile, financeEnabled = false, children }) {
 
       {/* Content */}
       <main className="flex-1">
-        <div className="max-w-3xl mx-auto px-4 py-4">
+        <div className="max-w-3xl lg:max-w-6xl mx-auto px-4 lg:px-8 py-4 lg:py-8 w-full">
           {/* Page transition: keyed motion.div replays the enter fade on each
               route change. No AnimatePresence/`mode="wait"` here — its exit-wait
               deadlocks when the outgoing page (e.g. the chat view) updates state
@@ -88,8 +141,8 @@ export default function Layout({ profile, financeEnabled = false, children }) {
         </div>
       </main>
 
-      {/* Bottom tab bar */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 pb-safe">
+      {/* Bottom tab bar (mobile / tablette) */}
+      <nav className="fixed bottom-0 inset-x-0 z-30 pb-safe lg:hidden">
         <div className="glass-strong border-t border-white/5">
           <div className="max-w-3xl mx-auto px-2 flex">
             {tabs.map((t) => {
@@ -130,6 +183,27 @@ export default function Layout({ profile, financeEnabled = false, children }) {
         </div>
       </nav>
     </div>
+  )
+}
+
+/** Lien de la sidebar PC. */
+function SideLink({ to, label, icon: Icon, end }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        classNames(
+          'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+          isActive
+            ? 'bg-neon-cyan/10 text-neon-cyan'
+            : 'text-ink-300 hover:text-white hover:bg-white/5',
+        )
+      }
+    >
+      <Icon className="w-5 h-5" strokeWidth={2.2} />
+      {label}
+    </NavLink>
   )
 }
 
