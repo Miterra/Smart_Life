@@ -33,7 +33,7 @@ export const PRIORITY = {
 }
 
 export const STATUS = {
-  todo: { label: 'À faire', cls: 'bg-white/10 text-ink-300 border-white/15' },
+  todo: { label: 'À faire', cls: 'bg-fg/10 text-ink-300 border-fg/15' },
   in_progress: { label: 'En cours', cls: 'bg-amber-500/15 text-neon-amber border-amber-500/30' },
   done: { label: 'Terminé', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
 }

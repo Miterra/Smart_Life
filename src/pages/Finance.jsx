@@ -206,7 +206,7 @@ export default function Finance({ profile, myCategoryCount = 0 }) {
                       style={{ background: c.color || '#64748b' }}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white truncate">{c.name}</p>
+                      <p className="text-sm text-fg truncate">{c.name}</p>
                       <p className="text-[11px] text-ink-400">
                         <span className="text-emerald-300">+{eur(c.in)}</span>
                         {' · '}
@@ -365,7 +365,7 @@ function FinanceRow({ row, canDelete, catName, onChange }) {
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-white truncate">{row.label}</p>
+        <p className="text-sm font-medium text-fg truncate">{row.label}</p>
         <p className="text-[11px] text-ink-400">
           {format(parseISO(row.occurred_on), 'd MMM yyyy', { locale: fr })}
           {catName ? ` · ${catName}` : ''}
@@ -436,7 +436,7 @@ function FinanceForm({ profile, categories, onClose, onSaved }) {
         transition={{ type: 'spring', damping: 24 }}
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
-        className="glass-strong rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-5 pb-safe border border-white/10"
+        className="glass-strong rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-5 pb-safe border border-fg/10"
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="heading text-lg">Nouvelle opération</h3>
@@ -453,7 +453,7 @@ function FinanceForm({ profile, categories, onClose, onSaved }) {
               'btn border',
               direction === 'in'
                 ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40'
-                : 'bg-white/5 text-ink-300 border-white/10',
+                : 'bg-fg/5 text-ink-300 border-fg/10',
             )}
           >
             <ArrowDownLeft className="w-4 h-4" /> Entrée
@@ -465,7 +465,7 @@ function FinanceForm({ profile, categories, onClose, onSaved }) {
               'btn border',
               direction === 'out'
                 ? 'bg-rose-500/20 text-rose-200 border-rose-500/40'
-                : 'bg-white/5 text-ink-300 border-white/10',
+                : 'bg-fg/5 text-ink-300 border-fg/10',
             )}
           >
             <ArrowUpRight className="w-4 h-4" /> Sortie

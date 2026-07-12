@@ -208,7 +208,7 @@ export default function People({ profile }) {
       </div>
 
       {canCats && (
-        <div className="flex gap-1 p-1 rounded-xl bg-ink-900/60 border border-white/10">
+        <div className="flex gap-1 p-1 rounded-xl bg-ink-900/60 border border-fg/10">
           {[
             ['people', 'Personnes', Users],
             ['categories', 'Catégories', Tag],
@@ -218,7 +218,7 @@ export default function People({ profile }) {
               onClick={() => setTab(key)}
               className={classNames(
                 'flex-1 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1.5',
-                tab === key ? 'bg-white/10 text-white' : 'text-ink-400 hover:text-ink-200',
+                tab === key ? 'bg-fg/10 text-fg' : 'text-ink-400 hover:text-ink-200',
               )}
             >
               <Icon className="w-4 h-4" />
@@ -345,13 +345,13 @@ function PersonRow({ person, me, name, onSetRole, onRemove, onOpen }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
       whileTap={{ scale: 0.99 }}
-      className="card p-3 cursor-pointer hover:bg-white/[0.04] transition"
+      className="card p-3 cursor-pointer hover:bg-fg/[0.04] transition"
       onClick={onOpen}
     >
       <div className="flex items-center gap-3">
         <Avatar profile={person} size={40} showPresence />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white truncate">
+          <p className="text-sm font-semibold text-fg truncate">
             {name || person.full_name || person.email}
             {isSelf && <span className="text-ink-400 font-normal ml-1">(toi)</span>}
           </p>
@@ -374,7 +374,7 @@ function PersonRow({ person, me, name, onSetRole, onRemove, onOpen }) {
               <select
                 value={person.role}
                 onChange={(e) => onSetRole(person.id, e.target.value)}
-                className="text-[10px] bg-ink-900/80 border border-white/10 rounded px-1.5 py-0.5 text-ink-200"
+                className="text-[10px] bg-ink-900/80 border border-fg/10 rounded px-1.5 py-0.5 text-ink-200"
               >
                 <option value="admin">→ Admin</option>
                 <option value="manager">→ Manager</option>
@@ -436,7 +436,7 @@ function PersonDetailModal({
     <Modal onClose={onClose}>
       <div className="flex flex-col items-center text-center pt-2">
         <Avatar profile={person} size={96} ring showPresence className="shadow-lg mb-3" />
-        <h3 className="heading text-xl text-white">{displayName}</h3>
+        <h3 className="heading text-xl text-fg">{displayName}</h3>
         {canAlias && aliasValue && (
           <p className="text-[11px] text-ink-500 mt-0.5">Vrai nom : {realName}</p>
         )}
@@ -558,7 +558,7 @@ function CategoryRow({ category, profiles, onEdit, onMembers, onRemove }) {
           <Tag className="w-4 h-4" style={{ color }} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white truncate">{category.name}</p>
+          <p className="text-sm font-semibold text-fg truncate">{category.name}</p>
           <p className="text-[11px] text-ink-400 flex items-center gap-1">
             <Users className="w-3 h-3" /> {members.length}{' '}
             {members.length > 1 ? 'personnes' : 'personne'}
@@ -575,7 +575,7 @@ function CategoryRow({ category, profiles, onEdit, onMembers, onRemove }) {
               </div>
             ))}
             {members.length > 6 && (
-              <div className="w-5 h-5 rounded-full bg-white/10 border border-ink-900 text-[8px] font-bold flex items-center justify-center text-white">
+              <div className="w-5 h-5 rounded-full bg-fg/10 border border-ink-900 text-[8px] font-bold flex items-center justify-center text-fg">
                 +{members.length - 6}
               </div>
             )}
@@ -640,12 +640,12 @@ function CategoryModal({ initial, onClose, onSave }) {
                 onClick={() => setColor(c)}
                 className={classNames(
                   'w-7 h-7 rounded-full transition',
-                  color === c && 'ring-2 ring-white ring-offset-2 ring-offset-ink-950',
+                  color === c && 'ring-2 ring-fg ring-offset-2 ring-offset-ink-950',
                 )}
                 style={{ background: c }}
               />
             ))}
-            <label className="w-7 h-7 rounded-full overflow-hidden border border-white/20 cursor-pointer relative">
+            <label className="w-7 h-7 rounded-full overflow-hidden border border-fg/20 cursor-pointer relative">
               <input
                 type="color"
                 value={color}
@@ -697,7 +697,7 @@ function CategoryMembersModal({ category, profiles, onClose, onSave }) {
                 onClick={() => toggle(p.id)}
                 className={classNames(
                   'w-full flex items-center gap-3 p-2.5 rounded-xl transition',
-                  on ? 'bg-neon-cyan/15 ring-1 ring-neon-cyan/40' : 'hover:bg-white/5',
+                  on ? 'bg-neon-cyan/15 ring-1 ring-neon-cyan/40' : 'hover:bg-fg/5',
                 )}
               >
                 <div
@@ -707,7 +707,7 @@ function CategoryMembersModal({ category, profiles, onClose, onSave }) {
                   {initialsFor(p.full_name || p.email)}
                 </div>
                 <div className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-medium text-white truncate">
+                  <p className="text-sm font-medium text-fg truncate">
                     {p.full_name || p.email}
                   </p>
                   <p className="text-[11px] text-ink-400">{p.role}</p>
@@ -782,15 +782,15 @@ function InviteForm({ profile, onClose }) {
           Donne ces identifiants à l'utilisateur. Il pourra changer son mot de passe ensuite.
         </p>
         <div className="space-y-2 text-sm">
-          <div className="p-3 rounded-xl bg-ink-900/80 border border-white/10">
+          <div className="p-3 rounded-xl bg-ink-900/80 border border-fg/10">
             <p className="text-[10px] uppercase tracking-widest text-ink-400 mb-1">Email</p>
-            <p className="font-mono text-white">{done.email}</p>
+            <p className="font-mono text-fg">{done.email}</p>
           </div>
-          <div className="p-3 rounded-xl bg-ink-900/80 border border-white/10">
+          <div className="p-3 rounded-xl bg-ink-900/80 border border-fg/10">
             <p className="text-[10px] uppercase tracking-widest text-ink-400 mb-1">
               Mot de passe
             </p>
-            <p className="font-mono text-white">{done.password}</p>
+            <p className="font-mono text-fg">{done.password}</p>
           </div>
         </div>
         <button onClick={onClose} className="btn-primary w-full mt-4">
@@ -835,7 +835,7 @@ function InviteForm({ profile, onClose }) {
           <button
             type="button"
             onClick={() => setPassword(genPassword())}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-widest text-neon-cyan font-bold px-2 py-1 hover:bg-white/5 rounded"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-widest text-neon-cyan font-bold px-2 py-1 hover:bg-fg/5 rounded"
           >
             Auto
           </button>
@@ -876,7 +876,7 @@ function Modal({ children, onClose }) {
         exit={{ y: 40, opacity: 0 }}
         transition={{ type: 'spring', damping: 24 }}
         onClick={(e) => e.stopPropagation()}
-        className="glass-strong rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-5 pb-safe border border-white/10 relative"
+        className="glass-strong rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-5 pb-safe border border-fg/10 relative"
       >
         <button
           type="button"

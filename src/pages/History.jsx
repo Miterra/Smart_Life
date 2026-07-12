@@ -175,7 +175,7 @@ function Row({ row, canDelete, onDelete, showDay }) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm text-ink-100 leading-snug">
-              <span className="font-semibold text-white">{actor}</span> {row.summary}
+              <span className="font-semibold text-fg">{actor}</span> {row.summary}
             </p>
             <p className="text-[11px] text-ink-500 mt-0.5">
               {format(new Date(row.created_at), 'HH:mm')} ·{' '}
@@ -200,9 +200,9 @@ function Row({ row, canDelete, onDelete, showDay }) {
 function DayDivider({ date }) {
   return (
     <div className="flex items-center gap-2 my-2 first:mt-0">
-      <div className="flex-1 h-px bg-white/5" />
+      <div className="flex-1 h-px bg-fg/5" />
       <span className="text-[10px] uppercase tracking-widest text-ink-500">{dayLabel(date)}</span>
-      <div className="flex-1 h-px bg-white/5" />
+      <div className="flex-1 h-px bg-fg/5" />
     </div>
   )
 }

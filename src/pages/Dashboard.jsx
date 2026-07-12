@@ -11,23 +11,21 @@ import {
   MapPin,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { listInsights, listTasks, listAppointments, subscribeRealtime } from '../lib/repository'
+import { listTasks, listAppointments, subscribeRealtime } from '../lib/repository'
 import { fmtShort, classNames, PRIORITY, STATUS } from '../lib/utils'
 import { isStandalone, isIos, getPermissionStatus } from '../lib/notifications'
 
 export default function Dashboard({ profile }) {
   const [tasks, setTasks] = useState([])
-  const [insights, setInsights] = useState([])
   const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let alive = true
     const load = async () => {
-      const [t, i, a] = await Promise.all([listTasks(), listInsights(8), listAppointments()])
+      const [t, a] = await Promise.all([listTasks(), listAppointments()])
       if (!alive) return
       setTasks(t)
-      setInsights(i)
       setAppointments(a)
       setLoading(false)
     }
@@ -36,14 +34,72 @@ export default function Dashboard({ profile }) {
       if (alive) setLoading(false)
     })
 
-    const sub = subscribeRealtime(['tasks', 'insights', 'appointments'], () =>
-      load().catch(console.error),
-    )
+    const sub = subscribeRealtime(['tasks', 'appointments'], () => load().catch(console.error))
     return () => {
       alive = false
       sub.unsubscribe()
     }
   }, [])
+
+  // Insights calculés en direct : ce qui est en retard, urgent ou proche.
+  const insights = useMemo(() => {
+    const now = Date.now()
+    const mine = tasks.filter(
+      (t) => t.assigned_to === profile.id && t.status !== 'done' && t.due_at,
+    )
+    const names = (arr) =>
+      arr.slice(0, 3).map((t) => t.title).join(', ') + (arr.length > 3 ? '…' : '')
+    const overdue = mine
+      .filter((t) => new Date(t.due_at).getTime() < now)
+      .sort((a, b) => new Date(a.due_at) - new Date(b.due_at))
+    const soon = mine.filter((t) => {
+      const d = new Date(t.due_at).getTime()
+      return d >= now && d < now + 48 * 3600 * 1000
+    })
+    const todayRdv = appointments.filter((a) => {
+      const s = new Date(a.start_at).getTime()
+      return s >= now - 3600000 && new Date(a.start_at).toDateString() === new Date().toDateString()
+    })
+    const out = []
+    if (overdue.length)
+      out.push({
+        id: 'overdue',
+        tone: 'danger',
+        title: `${overdue.length} tâche${overdue.length > 1 ? 's' : ''} en retard`,
+        body: `À faire d'urgence : ${names(overdue)}.`,
+      })
+    if (soon.length)
+      out.push({
+        id: 'soon',
+        tone: 'warning',
+        title: `${soon.length} tâche${soon.length > 1 ? 's' : ''} à faire bientôt`,
+        body: `Échéance sous 48 h : ${names(soon)}.`,
+      })
+    if (todayRdv.length)
+      out.push({
+        id: 'rdv',
+        tone: 'info',
+        title: `${todayRdv.length} rendez-vous aujourd'hui`,
+        body: todayRdv
+          .slice(0, 3)
+          .map(
+            (a) =>
+              `${a.title} à ${new Date(a.start_at).toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}`,
+          )
+          .join(', '),
+      })
+    if (!out.length)
+      out.push({
+        id: 'ok',
+        tone: 'success',
+        title: 'Tout est sous contrôle',
+        body: 'Aucune tâche en retard ni urgente. Continue comme ça. 🎯',
+      })
+    return out
+  }, [tasks, appointments, profile.id])
 
   const todayTasks = useMemo(() => {
     const today = new Date().toDateString()
@@ -187,7 +243,7 @@ function PushBanner() {
           <Bell className="w-4 h-4 text-neon-cyan" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white leading-tight mb-1">
+          <p className="text-sm font-semibold text-fg leading-tight mb-1">
             {iosNeedsInstall ? 'Installe Smart Life sur ton iPhone' : 'Active les notifications'}
           </p>
           <p className="text-xs text-ink-300 leading-snug">
@@ -210,7 +266,7 @@ function PushBanner() {
             setDismissed(true)
           }}
           aria-label="Fermer"
-          className="text-ink-400 hover:text-white text-xs"
+          className="text-ink-400 hover:text-fg text-xs"
         >
           ✕
         </button>
@@ -236,7 +292,7 @@ function ProductivityCard({ score }) {
         </span>
         <span className="text-ink-400 text-xs mb-1.5">/ 100</span>
       </div>
-      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-fg/5 rounded-full overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${score}%` }}
@@ -274,7 +330,7 @@ function Stat({ icon: Icon, label, value }) {
         <Icon className="w-3.5 h-3.5" />
         {label}
       </span>
-      <span className="font-bold text-white">{value}</span>
+      <span className="font-bold text-fg">{value}</span>
     </div>
   )
 }
@@ -288,7 +344,7 @@ function MiniTask({ task }) {
     >
       <div className={classNames('w-1 self-stretch rounded-full', prioBar(task.priority))} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-white truncate">{task.title}</p>
+        <p className="text-sm font-medium text-fg truncate">{task.title}</p>
         <p className="text-xs text-ink-400">{fmtShort(task.due_at)}</p>
       </div>
       <span className={classNames('chip border', stat.cls)}>{stat.label}</span>
@@ -304,7 +360,7 @@ function MiniRdv({ rdv }) {
     >
       <div className="w-1 self-stretch rounded-full bg-neon-magenta" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-white truncate">{rdv.title}</p>
+        <p className="text-sm font-medium text-fg truncate">{rdv.title}</p>
         <p className="text-xs text-ink-400 flex items-center gap-2">
           <span>{fmtShort(rdv.start_at)}</span>
           {rdv.location && (
@@ -339,7 +395,7 @@ function InsightCard({ insight }) {
       <div className="flex items-start gap-2.5">
         <Icon className="w-4 h-4 text-ink-200 mt-0.5 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white">{insight.title}</p>
+          <p className="text-sm font-semibold text-fg">{insight.title}</p>
           {insight.body && (
             <p className="text-xs text-ink-300 mt-1 leading-relaxed">{insight.body}</p>
           )}

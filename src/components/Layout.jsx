@@ -41,7 +41,7 @@ export default function Layout({ profile, financeEnabled = false, children }) {
   return (
     <div className="min-h-screen flex flex-col pb-24 lg:pb-0 lg:pl-64">
       {/* Sidebar (PC / grand écran) */}
-      <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-64 z-40 glass-strong border-r border-white/5 p-4">
+      <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-64 z-40 glass-strong border-r border-fg/5 p-4">
         <Link to="/" className="flex items-center gap-2.5 px-2 py-1.5 mb-6">
           <div className="relative">
             <div className="absolute inset-0 bg-neon-magenta/40 blur-md rounded-xl" />
@@ -59,16 +59,16 @@ export default function Layout({ profile, financeEnabled = false, children }) {
           {tabs.map((t) => (
             <SideLink key={t.to} {...t} end={t.to === '/'} />
           ))}
-          <div className="h-px bg-white/5 my-3" />
+          <div className="h-px bg-fg/5 my-3" />
           {secondary.map((t) => (
             <SideLink key={t.to} {...t} />
           ))}
         </nav>
 
-        <div className="mt-4 pt-4 border-t border-white/5 flex items-center gap-2.5">
+        <div className="mt-4 pt-4 border-t border-fg/5 flex items-center gap-2.5">
           <Avatar profile={profile} size={36} />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">
+            <p className="text-sm font-medium text-fg truncate">
               {profile?.full_name || profile?.email}
             </p>
             <p className="text-[10px] uppercase tracking-widest text-ink-400">
@@ -88,7 +88,7 @@ export default function Layout({ profile, financeEnabled = false, children }) {
 
       {/* Top bar (mobile / tablette) */}
       <header className="sticky top-0 z-30 pt-safe lg:hidden">
-        <div className="glass-strong border-b border-white/5">
+        <div className="glass-strong border-b border-fg/5">
           <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
             <Link to="/" className="flex items-center gap-2.5">
               <div className="relative">
@@ -143,7 +143,7 @@ export default function Layout({ profile, financeEnabled = false, children }) {
 
       {/* Bottom tab bar (mobile / tablette) */}
       <nav className="fixed bottom-0 inset-x-0 z-30 pb-safe lg:hidden">
-        <div className="glass-strong border-t border-white/5">
+        <div className="glass-strong border-t border-fg/5">
           <div className="max-w-3xl mx-auto px-2 flex">
             {tabs.map((t) => {
               const Icon = t.icon
@@ -197,7 +197,7 @@ function SideLink({ to, label, icon: Icon, end }) {
           'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
           isActive
             ? 'bg-neon-cyan/10 text-neon-cyan'
-            : 'text-ink-300 hover:text-white hover:bg-white/5',
+            : 'text-ink-300 hover:text-fg hover:bg-fg/5',
         )
       }
     >
@@ -212,7 +212,7 @@ function HeaderLink({ to, title, children }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        classNames('btn-ghost px-2.5 py-2', isActive && 'text-neon-cyan bg-white/5')
+        classNames('btn-ghost px-2.5 py-2', isActive && 'text-neon-cyan bg-fg/5')
       }
       title={title}
     >

@@ -122,7 +122,7 @@ export default function AuthGate() {
             setError('')
             setNeedsConfirm(false)
           }}
-          className="w-full mt-4 text-xs text-ink-300 hover:text-white transition"
+          className="w-full mt-4 text-xs text-ink-300 hover:text-fg transition"
         >
           {mode === 'signin'
             ? "Pas encore de compte ? S'inscrire"

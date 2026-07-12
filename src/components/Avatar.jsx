@@ -24,7 +24,7 @@ export default function Avatar({ profile, size = 40, className = '', ring = fals
 
   const base = classNames(
     'rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 select-none',
-    ring && 'ring-2 ring-white/15',
+    ring && 'ring-2 ring-fg/15',
     className,
   )
 

@@ -2,25 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Thème NUIT (défaut) — valeurs RGB (triplets) consommées par tailwind. */
 :root {
   color-scheme: dark;
+  --bg: 5 7 13;
+  --ink-900: 11 15 26;
+  --ink-800: 16 22 38;
+  --ink-700: 26 34 54;
+  --ink-600: 37 46 70;
+  --ink-500: 58 70 102;
+  --ink-400: 93 106 138;
+  --ink-300: 141 151 179;
+  --ink-200: 195 201 221;
+  --ink-100: 221 225 238;
+  --fg: 255 255 255;
+  --tint-cyan: 0.07;
+  --tint-magenta: 0.06;
+}
+
+/* Thème JOUR. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: 244 246 251;
+  --ink-900: 255 255 255;
+  --ink-800: 255 255 255;
+  --ink-700: 226 232 240;
+  --ink-600: 203 213 225;
+  --ink-500: 148 163 184;
+  --ink-400: 100 116 139;
+  --ink-300: 71 85 105;
+  --ink-200: 51 65 85;
+  --ink-100: 30 41 59;
+  --fg: 17 24 39;
+  --tint-cyan: 0.1;
+  --tint-magenta: 0.08;
 }
 
 html,
 body,
 #root {
   height: 100%;
-  background: #05070d;
+  background: rgb(var(--bg));
 }
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  color: #e6e9f3;
+  color: rgb(var(--fg));
   -webkit-font-smoothing: antialiased;
   background:
-    radial-gradient(circle at 20% 0%, rgba(34, 211, 238, 0.07), transparent 50%),
-    radial-gradient(circle at 80% 100%, rgba(232, 121, 249, 0.06), transparent 55%),
-    #05070d;
+    radial-gradient(circle at 20% 0%, rgba(34, 211, 238, var(--tint-cyan)), transparent 50%),
+    radial-gradient(circle at 80% 100%, rgba(232, 121, 249, var(--tint-magenta)), transparent 55%),
+    rgb(var(--bg));
   background-attachment: fixed;
   overflow-x: hidden;
 }
@@ -42,16 +74,16 @@ button {
 
 @layer components {
   .glass {
-    @apply bg-ink-800/60 backdrop-blur-xl border border-white/5;
+    @apply bg-ink-800/60 backdrop-blur-xl border border-fg/5;
   }
   .glass-strong {
-    @apply bg-ink-800/85 backdrop-blur-2xl border border-white/10;
+    @apply bg-ink-800/85 backdrop-blur-2xl border border-fg/10;
   }
   .card {
     @apply glass rounded-2xl shadow-card;
   }
   .heading {
-    @apply font-display tracking-tight text-white;
+    @apply font-display tracking-tight text-fg;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 select-none disabled:opacity-50 disabled:cursor-not-allowed;
@@ -60,16 +92,16 @@ button {
     @apply btn bg-neon-cyan text-ink-950 hover:bg-cyan-300 shadow-glow active:scale-95;
   }
   .btn-secondary {
-    @apply btn bg-white/10 hover:bg-white/15 text-white border border-white/10 active:scale-95;
+    @apply btn bg-fg/10 hover:bg-fg/15 text-fg border border-fg/10 active:scale-95;
   }
   .btn-ghost {
-    @apply btn text-ink-300 hover:text-white hover:bg-white/5 active:scale-95;
+    @apply btn text-ink-300 hover:text-fg hover:bg-fg/5 active:scale-95;
   }
   .btn-danger {
     @apply btn bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border border-rose-500/30 active:scale-95;
   }
   .input {
-    @apply w-full bg-ink-900/80 border border-white/10 text-white placeholder-ink-400 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-neon-cyan/40 focus:border-neon-cyan/40 transition;
+    @apply w-full min-w-0 bg-ink-900/80 border border-fg/10 text-fg placeholder-ink-400 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-neon-cyan/40 focus:border-neon-cyan/40 transition;
   }
   .chip {
     @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide uppercase;
@@ -88,11 +120,11 @@ button {
   height: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgb(var(--fg) / 0.12);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgb(var(--fg) / 0.22);
 }
 
 /* Safe area iOS */

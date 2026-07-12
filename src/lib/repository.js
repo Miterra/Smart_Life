@@ -174,6 +174,25 @@ export async function setViewingGroup(groupId) {
   }
 }
 
+/* ---------- Messages non lus (par groupe) ---------- */
+/** Marque le groupe comme lu (dernier message vu). Fire-and-forget. */
+export async function markGroupRead(groupId) {
+  try {
+    await supabase.rpc('mark_group_read', { gid: groupId })
+  } catch (e) {
+    console.warn('[read] mark failed', e)
+  }
+}
+
+/** { [group_id]: nb } — messages d'autrui non lus, par groupe. */
+export async function listUnreadCounts() {
+  const { data, error } = await supabase.rpc('unread_counts')
+  if (error) throw error
+  const map = {}
+  for (const r of data || []) map[r.group_id] = Number(r.count)
+  return map
+}
+
 /* ---------- Catégories de personnes ---------- */
 export async function listCategories() {
   const { data, error } = await supabase
@@ -451,6 +470,94 @@ export async function deleteMessage(id) {
   if (error) throw error
 }
 
+/* ---------- Espace fichiers du groupe (dossiers + fichiers) ---------- */
+export async function listGroupFolders(groupId) {
+  const { data, error } = await supabase
+    .from('group_folders')
+    .select('*')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+export async function createGroupFolder(groupId, name, parentId = null) {
+  const uid = await _myId()
+  const { data, error } = await supabase
+    .from('group_folders')
+    .insert({ group_id: groupId, name, parent_id: parentId, created_by: uid })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteGroupFolder(id) {
+  const { error } = await supabase.from('group_folders').delete().eq('id', id)
+  if (error) throw error
+}
+
+/** Liste les fichiers d'un groupe + URLs signées (1 h) pour chaque octet. */
+export async function listGroupFiles(groupId) {
+  const { data, error } = await supabase
+    .from('group_files')
+    .select('*')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  const rows = data || []
+  const paths = rows.map((r) => r.path).filter(Boolean)
+  if (paths.length > 0) {
+    const { data: signed } = await supabase.storage.from('chat-files').createSignedUrls(paths, 3600)
+    const map = {}
+    for (const s of signed || []) if (s?.path && s?.signedUrl) map[s.path] = s.signedUrl
+    for (const r of rows) r.url = map[r.path] || null
+  }
+  return rows
+}
+
+/** Upload dans le bucket "chat-files" sous {group_id}/lib/... + enregistre la ligne. */
+export async function uploadLibraryFile(groupId, folderId, file) {
+  const rawExt = (file.name?.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const ext = rawExt ? `.${rawExt}` : ''
+  const path = `${groupId}/lib/${crypto.randomUUID()}${ext}`
+  const { error: upErr } = await supabase.storage.from('chat-files').upload(path, file, {
+    cacheControl: '3600',
+    upsert: false,
+    contentType: file.type || undefined,
+  })
+  if (upErr) throw upErr
+  const uid = await _myId()
+  const { data, error } = await supabase
+    .from('group_files')
+    .insert({
+      group_id: groupId,
+      folder_id: folderId || null,
+      name: file.name || 'fichier',
+      path,
+      type: attachmentTypeFor(file),
+      size: file.size ?? null,
+      created_by: uid,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+/** Supprime un fichier : d'abord l'octet du bucket, puis la ligne. */
+export async function deleteGroupFile(file) {
+  if (file?.path) {
+    try {
+      await supabase.storage.from('chat-files').remove([file.path])
+    } catch (e) {
+      console.warn('[lib] remove blob failed', e)
+    }
+  }
+  const { error } = await supabase.from('group_files').delete().eq('id', file.id)
+  if (error) throw error
+}
+
 /** Ajoute/retire une réaction emoji de l'utilisateur courant. Renvoie true si ajoutée. */
 export async function toggleReaction(messageId, emoji) {
   const uid = await _myId()
@@ -635,26 +742,10 @@ export async function deleteFinance(id) {
   if (error) throw error
 }
 
-/* ---------- Insights ---------- */
-export async function listInsights(limit = 20) {
-  const { data, error } = await supabase
-    .from('insights')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit)
-  if (error) throw error
-  return data
-}
-
-export async function createInsight(payload) {
-  const { data, error } = await supabase
-    .from('insights')
-    .insert(payload)
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
+/* ---------- Insights ----------
+ * Les insights du Dashboard sont désormais calculés côté client (retard /
+ * urgent / RDV du jour). La table `insights` reste utilisée par l'edge
+ * function send-reminders (push serveur), plus par le front. */
 
 /* ---------- Realtime subscriptions ---------- */
 export function subscribeRealtime(tables, onChange) {

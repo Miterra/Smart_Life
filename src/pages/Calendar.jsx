@@ -203,12 +203,12 @@ export default function Calendar({ profile }) {
                       initial={{ opacity: 0, y: -6, scale: 0.97 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -6, scale: 0.97 }}
-                      className="absolute right-0 mt-2 z-50 glass-strong rounded-xl border border-white/10 p-1.5 w-44 shadow-card"
+                      className="absolute right-0 mt-2 z-50 glass-strong rounded-xl border border-fg/10 p-1.5 w-44 shadow-card"
                     >
                       {canRdv && (
                         <button
                           onClick={openNewRdv}
-                          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-white hover:bg-white/5"
+                          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-fg hover:bg-fg/5"
                         >
                           <CalendarClock className="w-4 h-4 text-neon-cyan" /> Nouveau RDV
                         </button>
@@ -216,7 +216,7 @@ export default function Calendar({ profile }) {
                       {canPeriod && (
                         <button
                           onClick={openNewPeriod}
-                          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-white hover:bg-white/5"
+                          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-fg hover:bg-fg/5"
                         >
                           <Plane className="w-4 h-4 text-neon-magenta" /> Nouvelle période
                         </button>
@@ -239,7 +239,7 @@ export default function Calendar({ profile }) {
               <button
                 key={p.id}
                 onClick={() => canPeriod && setPeriodForm({ initial: p })}
-                className="chip border bg-white/5 border-white/10 text-ink-200"
+                className="chip border bg-fg/5 border-fg/10 text-ink-200"
                 style={{ color: p.color, borderColor: `${p.color}55` }}
               >
                 <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
@@ -262,7 +262,7 @@ export default function Calendar({ profile }) {
             <button
               onClick={() => setLoadErr('')}
               aria-label="Masquer l’erreur"
-              className="text-ink-400 hover:text-white p-1"
+              className="text-ink-400 hover:text-fg p-1"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -296,10 +296,10 @@ export default function Calendar({ profile }) {
                 onClick={() => setSelected(d)}
                 className={classNames(
                   'aspect-square rounded-lg flex flex-col items-center justify-start pt-1 relative overflow-hidden transition',
-                  inMonth ? 'text-white' : 'text-ink-500',
+                  inMonth ? 'text-fg' : 'text-ink-500',
                   isSel && 'bg-neon-cyan/20 ring-1 ring-neon-cyan/50',
-                  !isSel && today && 'bg-white/10',
-                  !isSel && !today && 'hover:bg-white/5',
+                  !isSel && today && 'bg-fg/10',
+                  !isSel && !today && 'hover:bg-fg/5',
                 )}
               >
                 <span className={classNames('text-xs font-semibold', today && 'text-neon-cyan')}>
@@ -422,13 +422,13 @@ function RdvRow({ rdv, profile, profiles, onEdit, onChange }) {
     <li className="card p-3 flex items-start gap-3 border-l-2 border-neon-magenta">
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-medium text-white">{rdv.title}</p>
+          <p className="text-sm font-medium text-fg">{rdv.title}</p>
           <div className="flex items-center gap-1">
             {canEdit && (
               <button
                 aria-label="Modifier le rendez-vous"
                 onClick={onEdit}
-                className="text-ink-400 hover:text-white p-1"
+                className="text-ink-400 hover:text-fg p-1"
               >
                 <Edit3 className="w-3.5 h-3.5" />
               </button>
@@ -479,14 +479,14 @@ function DayTask({ task, profiles }) {
     <li className="card p-3 flex items-start gap-3">
       <div className={classNames('w-1 self-stretch rounded-full', priorityDot(task.priority))} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-white">{task.title}</p>
+        <p className="text-sm font-medium text-fg">{task.title}</p>
         {task.description && <p className="text-xs text-ink-300 mt-1">{task.description}</p>}
         <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-ink-400">
           <span className="flex items-center gap-1">
             <Clock className="w-3 h-3" />
             {task.due_at ? format(new Date(task.due_at), 'HH:mm') : ''}
           </span>
-          <span className="chip border bg-white/5 border-white/10">Tâche</span>
+          <span className="chip border bg-fg/5 border-fg/10">Tâche</span>
           {assignee && (
             <span className="flex items-center gap-1">
               <span
@@ -748,12 +748,12 @@ function PeriodForm({ initial, defaultStart, month, periods, profile, onClose, o
                 }}
                 className={classNames(
                   'w-7 h-7 rounded-full transition',
-                  effectiveColor === c ? 'ring-2 ring-white ring-offset-2 ring-offset-ink-900' : 'opacity-80 hover:opacity-100',
+                  effectiveColor === c ? 'ring-2 ring-fg ring-offset-2 ring-offset-ink-900' : 'opacity-80 hover:opacity-100',
                 )}
                 style={{ background: c }}
               />
             ))}
-            <label className="w-7 h-7 rounded-full overflow-hidden border border-white/20 relative cursor-pointer">
+            <label className="w-7 h-7 rounded-full overflow-hidden border border-fg/20 relative cursor-pointer">
               <input
                 type="color"
                 value={effectiveColor}
@@ -806,7 +806,7 @@ function Modal({ children, onClose, title }) {
         exit={{ y: 40, opacity: 0 }}
         transition={{ type: 'spring', damping: 24 }}
         onClick={(e) => e.stopPropagation()}
-        className="glass-strong rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md max-h-[88vh] overflow-y-auto p-5 pb-safe border border-white/10 relative"
+        className="glass-strong rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md max-h-[88vh] overflow-y-auto p-5 pb-safe border border-fg/10 relative"
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="heading text-lg">{title}</h3>

@@ -11,6 +11,8 @@ import {
   Camera,
   Loader2,
   Tag,
+  Moon,
+  Sun,
 } from 'lucide-react'
 import {
   enableNotifications,
@@ -26,11 +28,13 @@ import { updateProfile, uploadAvatar, getMyCategories } from '../lib/repository'
 import { signOut } from '../lib/auth'
 import { ROLE_LABELS } from '../lib/roles'
 import { classNames } from '../lib/utils'
+import { getTheme, setTheme as persistTheme } from '../lib/theme'
 import Avatar from '../components/Avatar'
 
 export default function Settings({ profile }) {
   const [perm, setPerm] = useState('default')
   const [subscribed, setSubscribed] = useState(false)
+  const [theme, setTheme] = useState(getTheme())
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
   const [fullName, setFullName] = useState(profile.full_name || '')
@@ -191,7 +195,7 @@ export default function Settings({ profile }) {
               <p className="text-[10px] uppercase tracking-widest text-ink-400">
                 {ROLE_LABELS[profile.role]}
               </p>
-              <p className="text-sm text-white truncate">{profile.email}</p>
+              <p className="text-sm text-fg truncate">{profile.email}</p>
             </div>
           </div>
           <label className="block">
@@ -205,9 +209,9 @@ export default function Settings({ profile }) {
               className="input"
             />
           </label>
-          <label className="flex items-center justify-between gap-3 p-3 rounded-xl bg-ink-900/60 border border-white/5">
+          <label className="flex items-center justify-between gap-3 p-3 rounded-xl bg-ink-900/60 border border-fg/5">
             <div>
-              <p className="text-sm text-white font-medium">Recevoir les notifications</p>
+              <p className="text-sm text-fg font-medium">Recevoir les notifications</p>
               <p className="text-[11px] text-ink-400">
                 Désactive pour ne plus recevoir de push sur tes devices.
               </p>
@@ -222,6 +226,37 @@ export default function Settings({ profile }) {
           <button onClick={saveProfile} className="btn-primary w-full" disabled={savingProf}>
             {savingProf ? '…' : 'Enregistrer'}
           </button>
+        </div>
+      </Section>
+
+      <Section title="Apparence" icon={theme === 'light' ? Sun : Moon}>
+        <div className="card p-3">
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              ['dark', 'Nuit', Moon],
+              ['light', 'Jour', Sun],
+            ].map(([key, label, Icon]) => (
+              <button
+                key={key}
+                onClick={() => {
+                  setTheme(key)
+                  persistTheme(key)
+                }}
+                className={classNames(
+                  'flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium border transition',
+                  theme === key
+                    ? 'bg-neon-cyan/15 text-neon-cyan border-neon-cyan/40'
+                    : 'bg-fg/5 text-ink-300 border-fg/10 hover:bg-fg/10',
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-ink-500 mt-2 px-1">
+            Ton choix est conservé sur cet appareil, même après fermeture de l'app.
+          </p>
         </div>
       </Section>
 
@@ -260,7 +295,7 @@ export default function Settings({ profile }) {
             <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
               <Smartphone className="w-4 h-4 text-neon-amber flex-shrink-0 mt-0.5" />
               <div className="text-xs leading-relaxed">
-                <p className="font-semibold text-white mb-1">Installation requise (iOS)</p>
+                <p className="font-semibold text-fg mb-1">Installation requise (iOS)</p>
                 <p className="text-ink-300">
                   Ouvre Smart Life dans Safari → bouton Partager → « Sur l'écran d'accueil ».
                   Relance l'app depuis l'icône, puis active ici.
@@ -271,7 +306,7 @@ export default function Settings({ profile }) {
 
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-white">Statut de ce device</p>
+              <p className="text-sm font-semibold text-fg">Statut de ce device</p>
               <p className="text-[11px] text-ink-400">
                 {perm === 'denied'
                   ? 'Bloqué — réactive dans les paramètres système.'
@@ -285,7 +320,7 @@ export default function Settings({ profile }) {
                 'chip border',
                 perm === 'granted' && subscribed
                   ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                  : 'bg-white/5 text-ink-300 border-white/10',
+                  : 'bg-fg/5 text-ink-300 border-fg/10',
               )}
             >
               {perm === 'granted' && subscribed ? 'actif' : perm}

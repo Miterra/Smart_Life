@@ -132,7 +132,7 @@ export default function Tasks({ profile }) {
               'chip border whitespace-nowrap',
               filter === f.id
                 ? 'bg-neon-cyan/20 text-neon-cyan border-neon-cyan/40'
-                : 'bg-white/5 text-ink-300 border-white/10 hover:bg-white/10',
+                : 'bg-fg/5 text-ink-300 border-fg/10 hover:bg-fg/10',
             )}
           >
             <Filter className="w-3 h-3" />
@@ -256,7 +256,7 @@ function TaskRow({ task, profile, profiles, onEdit, onChange }) {
           ) : task.status === 'in_progress' ? (
             <PlayCircle className="w-6 h-6 text-neon-amber" strokeWidth={2} />
           ) : (
-            <Circle className="w-6 h-6 text-ink-400 hover:text-white" strokeWidth={2} />
+            <Circle className="w-6 h-6 text-ink-400 hover:text-fg" strokeWidth={2} />
           )}
         </button>
 
@@ -264,8 +264,8 @@ function TaskRow({ task, profile, profiles, onEdit, onChange }) {
           <div className="flex items-start justify-between gap-2">
             <p
               className={classNames(
-                'text-sm font-medium leading-snug',
-                task.status === 'done' ? 'text-ink-400 line-through' : 'text-white',
+                'text-sm font-medium leading-snug min-w-0 break-words',
+                task.status === 'done' ? 'text-ink-400 line-through' : 'text-fg',
               )}
             >
               {task.title}
@@ -274,7 +274,7 @@ function TaskRow({ task, profile, profiles, onEdit, onChange }) {
               {canEdit && (
                 <button
                   onClick={onEdit}
-                  className="text-ink-400 hover:text-white p-1"
+                  className="text-ink-400 hover:text-fg p-1"
                   title="Éditer"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
@@ -293,7 +293,9 @@ function TaskRow({ task, profile, profiles, onEdit, onChange }) {
           </div>
 
           {task.description && (
-            <p className="text-xs text-ink-300 mt-1 leading-relaxed">{task.description}</p>
+            <p className="text-xs text-ink-300 mt-1 leading-relaxed break-words whitespace-pre-wrap">
+              {task.description}
+            </p>
           )}
 
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -308,7 +310,7 @@ function TaskRow({ task, profile, profiles, onEdit, onChange }) {
                   'chip border',
                   overdue
                     ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                    : 'bg-white/5 text-ink-300 border-white/10',
+                    : 'bg-fg/5 text-ink-300 border-fg/10',
                 )}
               >
                 <Clock className="w-3 h-3" />
@@ -316,7 +318,7 @@ function TaskRow({ task, profile, profiles, onEdit, onChange }) {
               </span>
             )}
             {assignee && (
-              <span className="chip border bg-white/5 text-ink-300 border-white/10">
+              <span className="chip border bg-fg/5 text-ink-300 border-fg/10">
                 <span
                   className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center text-[8px] font-bold text-ink-950"
                   style={{ background: assignee.avatar_color || colorFor(assignee.id) }}
@@ -409,7 +411,7 @@ function TaskForm({ initial, profile, profiles, groups, categories = [], onCance
         transition={{ type: 'spring', damping: 24 }}
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
-        className="glass-strong rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md max-h-[88vh] overflow-y-auto p-5 pb-safe border border-white/10"
+        className="glass-strong rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md max-h-[88vh] overflow-y-auto p-5 pb-safe border border-fg/10"
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="heading text-lg">{initial ? 'Éditer la tâche' : 'Nouvelle tâche'}</h3>
@@ -436,7 +438,7 @@ function TaskForm({ initial, profile, profiles, groups, categories = [], onCance
             className="input resize-none"
           />
           <div className="grid grid-cols-2 gap-3">
-            <label className="block">
+            <label className="block min-w-0">
               <span className="text-[10px] uppercase tracking-widest text-ink-400 mb-1 block">
                 Échéance
               </span>
@@ -447,7 +449,7 @@ function TaskForm({ initial, profile, profiles, groups, categories = [], onCance
                 className="input"
               />
             </label>
-            <label className="block">
+            <label className="block min-w-0">
               <span className="text-[10px] uppercase tracking-widest text-ink-400 mb-1 block">
                 Urgence
               </span>
@@ -482,7 +484,7 @@ function TaskForm({ initial, profile, profiles, groups, categories = [], onCance
             </label>
           )}
           <div className="grid grid-cols-2 gap-3">
-            <label className="block">
+            <label className="block min-w-0">
               <span className="text-[10px] uppercase tracking-widest text-ink-400 mb-1 block">
                 Assigner à
               </span>
@@ -499,7 +501,7 @@ function TaskForm({ initial, profile, profiles, groups, categories = [], onCance
                 ))}
               </select>
             </label>
-            <label className="block">
+            <label className="block min-w-0">
               <span className="text-[10px] uppercase tracking-widest text-ink-400 mb-1 block">
                 Statut
               </span>

@@ -4,21 +4,25 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Échelle "ink" pilotée par variables CSS (thème jour/nuit).
+        // 950 reste fixe (sombre) : sert au texte sur fond accent (btn-primary,
+        // initiales d'avatar, badges) et au voile des overlays de modale
+        // (bg-ink-950/80), volontairement sombre dans les 2 thèmes.
         ink: {
           950: '#05070d',
-          900: '#0b0f1a',
-          800: '#101626',
-          700: '#1a2236',
-          600: '#252e46',
-          500: '#3a4666',
-          400: '#5d6a8a',
-          300: '#8d97b3',
-          // 100/200 étaient utilisées dans le code sans être définies
-          // (aucun CSS généré) : les bulles/textes retombaient sur la
-          // couleur héritée. Déclarées pour que text-ink-100/200 existent.
-          200: '#c3c9dd',
-          100: '#dde1ee',
+          900: 'rgb(var(--ink-900) / <alpha-value>)',
+          800: 'rgb(var(--ink-800) / <alpha-value>)',
+          700: 'rgb(var(--ink-700) / <alpha-value>)',
+          600: 'rgb(var(--ink-600) / <alpha-value>)',
+          500: 'rgb(var(--ink-500) / <alpha-value>)',
+          400: 'rgb(var(--ink-400) / <alpha-value>)',
+          300: 'rgb(var(--ink-300) / <alpha-value>)',
+          200: 'rgb(var(--ink-200) / <alpha-value>)',
+          100: 'rgb(var(--ink-100) / <alpha-value>)',
         },
+        // Premier plan : blanc en nuit, ardoise foncée en jour. Remplace les
+        // anciens text-white / bg-white/x / border-white/x (voir sed).
+        fg: 'rgb(var(--fg) / <alpha-value>)',
         neon: {
           cyan: '#22d3ee',
           magenta: '#e879f9',

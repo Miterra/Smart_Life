@@ -41,7 +41,7 @@ export const ROLE_COLORS = {
   owner: 'bg-neon-magenta/20 text-neon-magenta border-neon-magenta/30',
   admin: 'bg-neon-cyan/20 text-neon-cyan border-neon-cyan/30',
   manager: 'bg-neon-amber/20 text-neon-amber border-neon-amber/30',
-  user: 'bg-white/10 text-ink-300 border-white/15',
+  user: 'bg-fg/10 text-ink-300 border-fg/15',
 }
 
 /* ---------- Capacités par rôle ---------- */
