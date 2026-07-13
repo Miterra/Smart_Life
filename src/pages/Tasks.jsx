@@ -82,7 +82,10 @@ export default function Tasks({ profile }) {
 
   const filtered = useMemo(() => {
     let list = tasks
-    if (filter === 'mine') list = list.filter((t) => t.assigned_to === profile.id)
+    // « Mes tâches » = uniquement à faire / en cours ; une tâche terminée
+    // quitte cette vue et se retrouve dans l'onglet « Terminées ».
+    if (filter === 'mine')
+      list = list.filter((t) => t.assigned_to === profile.id && t.status !== 'done')
     if (filter === 'todo') list = list.filter((t) => t.status === 'todo')
     if (filter === 'in_progress') list = list.filter((t) => t.status === 'in_progress')
     if (filter === 'done') list = list.filter((t) => t.status === 'done')
