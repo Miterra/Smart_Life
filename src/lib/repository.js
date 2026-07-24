@@ -416,8 +416,25 @@ export async function listMessages(groupId, limit = 200) {
 function attachmentTypeFor(file) {
   const mime = file?.type || ''
   if (mime.startsWith('image/')) return 'image'
+  if (mime.startsWith('video/')) return 'video'
   if (mime === 'application/pdf') return 'pdf'
   return 'file'
+}
+
+/**
+ * Plafond d'upload : doit rester aligné sur le bucket "chat-files"
+ * (file_size_limit = 50 Mo, cf. migration phase15) et sur la limite globale
+ * du plan Supabase free.
+ */
+export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+/** Types acceptés par le bucket "chat-files" (images, PDF, vidéos). */
+export const ACCEPTED_UPLOAD = 'image/*,video/*,application/pdf'
+
+/** true si le fichier est d'un type accepté par le stockage. */
+export function isAcceptedUpload(file) {
+  const mime = file?.type || ''
+  return mime.startsWith('image/') || mime.startsWith('video/') || mime === 'application/pdf'
 }
 
 /** Upload une pièce jointe dans le bucket privé "chat-files" (sous {group_id}/...). */

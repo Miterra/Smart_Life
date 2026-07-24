@@ -25,6 +25,8 @@ import {
   FolderPlus,
   Upload,
   Image as ImageIcon,
+  Film,
+  Play,
 } from 'lucide-react'
 import {
   listGroups,
@@ -53,6 +55,9 @@ import {
   uploadLibraryFile,
   deleteGroupFile,
   subscribeRealtime,
+  MAX_UPLOAD_BYTES,
+  ACCEPTED_UPLOAD,
+  isAcceptedUpload,
 } from '../lib/repository'
 import { canManageGroups } from '../lib/roles'
 import { classNames, colorFor } from '../lib/utils'
@@ -1284,6 +1289,8 @@ function FileLibrary({ group, profile }) {
   // Seul le créateur d'un élément (ou le owner) peut le supprimer — aligné
   // sur la RLS et la policy storage (sinon blob orphelin dans le bucket).
   const canDelete = (item) => item.created_by === profile.id || profile.role === 'owner'
+  // Vidéo en cours de lecture (lue dans l'app plutôt que dans un onglet).
+  const [playing, setPlaying] = useState(null)
   const [folders, setFolders] = useState([])
   const [files, setFiles] = useState([])
   const [current, setCurrent] = useState(null) // dossier ouvert (null = racine)
@@ -1340,7 +1347,11 @@ function FileLibrary({ group, profile }) {
     const f = e.target.files?.[0]
     e.target.value = ''
     if (!f) return
-    if (f.size > 50 * 1024 * 1024) {
+    if (!isAcceptedUpload(f)) {
+      alert('Formats acceptés : images, vidéos (mp4, mov…) et PDF.')
+      return
+    }
+    if (f.size > MAX_UPLOAD_BYTES) {
       alert('Fichier trop volumineux (max 50 Mo).')
       return
     }
@@ -1416,7 +1427,7 @@ function FileLibrary({ group, profile }) {
             <FolderPlus className="w-4 h-4" />
           </button>
         )}
-        <input ref={fileRef} type="file" className="hidden" onChange={onPick} />
+        <input ref={fileRef} type="file" accept={ACCEPTED_UPLOAD} className="hidden" onChange={onPick} />
         <button
           onClick={() => fileRef.current?.click()}
           disabled={busy}
@@ -1493,10 +1504,22 @@ function FileLibrary({ group, profile }) {
                 href={f.url || undefined}
                 target="_blank"
                 rel="noreferrer"
+                onClick={(e) => {
+                  // Les vidéos se lisent dans l'app (utile en PWA) ; les autres
+                  // fichiers gardent l'ouverture/téléchargement natif.
+                  if (f.type === 'video' && f.url) {
+                    e.preventDefault()
+                    setPlaying(f)
+                  }
+                }}
                 className="flex items-center gap-3 flex-1 min-w-0"
               >
                 {f.type === 'image' && f.url ? (
                   <img src={f.url} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                ) : f.type === 'video' ? (
+                  <div className="w-9 h-9 rounded-lg bg-neon-magenta/15 flex items-center justify-center flex-shrink-0">
+                    <Film className="w-5 h-5 text-neon-magenta" />
+                  </div>
                 ) : (
                   <div className="w-9 h-9 rounded-lg bg-rose-500/15 flex items-center justify-center flex-shrink-0">
                     {f.type === 'image' ? (
@@ -1510,7 +1533,11 @@ function FileLibrary({ group, profile }) {
                   <p className="text-sm font-medium text-fg truncate">{f.name}</p>
                   <p className="text-[11px] text-ink-400">{f.size != null ? formatBytes(f.size) : ''}</p>
                 </div>
-                <Download className="w-4 h-4 text-ink-300 flex-shrink-0" />
+                {f.type === 'video' ? (
+                  <Play className="w-4 h-4 text-ink-300 flex-shrink-0" />
+                ) : (
+                  <Download className="w-4 h-4 text-ink-300 flex-shrink-0" />
+                )}
               </a>
               {canDelete(f) && (
                 <button
@@ -1525,7 +1552,57 @@ function FileLibrary({ group, profile }) {
           ))}
         </ul>
       )}
+
+      <AnimatePresence>
+        {playing && (
+          <VideoPlayer file={playing} onClose={() => setPlaying(null)} />
+        )}
+      </AnimatePresence>
     </div>
+  )
+}
+
+/** Lecteur vidéo plein écran (reste dans l'app, utile en PWA). */
+function VideoPlayer({ file, onClose }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-ink-950/90 backdrop-blur-sm flex items-center justify-center p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.96, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.96, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-2xl"
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <p className="flex-1 min-w-0 text-sm font-medium text-fg truncate">{file.name}</p>
+          <a
+            href={file.url || undefined}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-ghost p-2"
+            title="Télécharger"
+          >
+            <Download className="w-4 h-4" />
+          </a>
+          <button onClick={onClose} className="btn-ghost p-2" title="Fermer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <video
+          src={file.url || undefined}
+          controls
+          autoPlay
+          playsInline
+          className="w-full max-h-[70vh] rounded-2xl bg-ink-950"
+        />
+      </motion.div>
+    </motion.div>
   )
 }
 
