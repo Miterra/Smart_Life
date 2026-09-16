@@ -312,16 +312,19 @@ function SubscriptionForm({ initial, profile, categories, onClose, onSaved }) {
     initial?.billing_interval || BILLING_INTERVAL.MONTHLY,
   )
   const [categoryId, setCategoryId] = useState(initial?.category_id || '')
-  const [startedOn, setStartedOn] = useState(initial?.started_on || todayISO())
+  // Création : 1re échéance. Édition : prochaine échéance (modifiable).
+  const [chargeDate, setChargeDate] = useState(initial?.next_charge_on || todayISO())
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
 
   // Prévient avant de créer un abonnement rétroactif : on annonce combien de
   // dépenses vont apparaître immédiatement dans le grand livre.
   const backfill = useMemo(
-    () => (isEdit ? 0 : countDueOccurrences(startedOn, billingInterval)),
-    [isEdit, startedOn, billingInterval],
+    () => (isEdit ? 0 : countDueOccurrences(chargeDate, billingInterval)),
+    [isEdit, chargeDate, billingInterval],
   )
+  const dateChanged = isEdit && chargeDate !== initial.next_charge_on
+  const datePassee = chargeDate < todayISO()
 
   const submit = async (e) => {
     e.preventDefault()
@@ -342,12 +345,21 @@ function SubscriptionForm({ initial, profile, categories, onClose, onSaved }) {
         category: cat ? cat.name : null,
       }
       if (isEdit) {
-        await updateSubscription(initial.id, common)
+        const patch = { ...common }
+        if (dateChanged) {
+          patch.next_charge_on = chargeDate
+          // Le jour choisi devient le nouveau jour d'ancrage, sinon les
+          // échéances suivantes retomberaient sur l'ancien jour du mois.
+          // On ne touche à started_on QUE si la date a bougé : un abonnement
+          // du 31 momentanément calé au 28 février doit garder son ancrage.
+          patch.started_on = chargeDate
+        }
+        await updateSubscription(initial.id, patch)
       } else {
         await createSubscription({
           ...common,
-          started_on: startedOn,
-          next_charge_on: startedOn,
+          started_on: chargeDate,
+          next_charge_on: chargeDate,
           active: true,
           created_by: profile.id,
         })
@@ -434,19 +446,13 @@ function SubscriptionForm({ initial, profile, categories, onClose, onSaved }) {
               <span className="text-[10px] uppercase tracking-widest text-ink-400 mb-1 block">
                 {isEdit ? 'Prochaine échéance' : '1re échéance'}
               </span>
-              {isEdit ? (
-                <p className="input flex items-center text-ink-300">
-                  {format(parseISO(initial.next_charge_on), 'd MMM yyyy', { locale: fr })}
-                </p>
-              ) : (
-                <input
-                  type="date"
-                  value={startedOn}
-                  onChange={(e) => setStartedOn(e.target.value)}
-                  required
-                  className="input"
-                />
-              )}
+              <input
+                type="date"
+                value={chargeDate}
+                onChange={(e) => setChargeDate(e.target.value)}
+                required
+                className="input"
+              />
             </label>
           </div>
 
@@ -478,6 +484,13 @@ function SubscriptionForm({ initial, profile, categories, onClose, onSaved }) {
           {!isEdit && backfill === 0 && (
             <p className="text-[11px] text-ink-500 leading-relaxed">
               La dépense sera enregistrée automatiquement à chaque échéance.
+            </p>
+          )}
+          {dateChanged && (
+            <p className="text-[11px] text-neon-amber leading-relaxed">
+              {datePassee
+                ? 'Date passée : les échéances dues seront enregistrées maintenant (celles déjà comptabilisées ne seront pas dupliquées).'
+                : 'Les échéances suivantes suivront cette nouvelle date.'}
             </p>
           )}
         </div>
