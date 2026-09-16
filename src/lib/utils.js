@@ -22,6 +22,22 @@ export function fmtRel(d) {
   return formatDistanceToNow(date, { addSuffix: true, locale: fr })
 }
 
+/**
+ * Montant en euros, format français.
+ * @param {number} value
+ * @param {{ cents?: boolean }} [options] cents=true pour les montants où les
+ *   centimes comptent (abonnements à 9,99 € typiquement).
+ * @returns {string}
+ */
+export function formatEur(value, { cents = false } = {}) {
+  return Number(value || 0).toLocaleString('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: cents ? 2 : 0,
+    maximumFractionDigits: cents ? 2 : 0,
+  })
+}
+
 export function classNames(...arr) {
   return arr.filter(Boolean).join(' ')
 }

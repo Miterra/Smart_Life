@@ -12,3 +12,5 @@ dev-dist
 
 # Outillage local Claude Code (skills/agents installés) — hors app
 .claude
+.agents
+.codex

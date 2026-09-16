@@ -759,6 +759,67 @@ export async function deleteFinance(id) {
   if (error) throw error
 }
 
+/* ---------- Abonnements (dépenses récurrentes) ----------
+ * Mêmes règles que les finances : écriture owner uniquement, lecture admin
+ * limitée à ses catégories (RLS « subscriptions admin scoped select »).
+ * Les échéances dues deviennent de vraies lignes de public.finances, via le
+ * cron quotidien ou syncSubscriptionCharges() — l'opération est idempotente. */
+export async function listSubscriptions() {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('*')
+    .order('next_charge_on', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createSubscription(payload) {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .insert(payload)
+    .select()
+    .single()
+  if (error) throw error
+  logActivity('subscription.create', `a créé l'abonnement « ${data.label} »`, {
+    entity_type: 'subscription',
+    entity_id: data.id,
+  })
+  return data
+}
+
+export async function updateSubscription(id, patch) {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteSubscription(id) {
+  const { data: s } = await supabase.from('subscriptions').select('label').eq('id', id).single()
+  const { error } = await supabase.from('subscriptions').delete().eq('id', id)
+  if (error) throw error
+  logActivity('subscription.delete', `a supprimé l'abonnement${s?.label ? ` « ${s.label} »` : ''}`, {
+    entity_type: 'subscription',
+    entity_id: id,
+  })
+}
+
+/**
+ * Génère les échéances en retard (filet de sécurité si le cron quotidien n'a
+ * pas tourné). Idempotent, réservé au owner côté SQL, renvoie le nombre de
+ * dépenses créées.
+ * @returns {Promise<number>}
+ */
+export async function syncSubscriptionCharges() {
+  const { data, error } = await supabase.rpc('sync_subscription_charges')
+  if (error) throw error
+  return Number(data || 0)
+}
+
 /* ---------- Insights ----------
  * Les insights du Dashboard sont désormais calculés côté client (retard /
  * urgent / RDV du jour). La table `insights` reste utilisée par l'edge

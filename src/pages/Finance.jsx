@@ -11,6 +11,7 @@ import {
   ArrowUpRight,
   Lock,
   Tags,
+  Repeat,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -30,18 +31,12 @@ import {
   createFinance,
   deleteFinance,
   listCategories,
+  syncSubscriptionCharges,
   subscribeRealtime,
 } from '../lib/repository'
 import { canAccessFinance, isOwner } from '../lib/roles'
-import { classNames } from '../lib/utils'
-
-function eur(n) {
-  return Number(n || 0).toLocaleString('fr-FR', {
-    style: 'currency',
-    currency: 'EUR',
-    maximumFractionDigits: 0,
-  })
-}
+import { classNames, formatEur as eur } from '../lib/utils'
+import SubscriptionsPanel from '../components/SubscriptionsPanel'
 
 export default function Finance({ profile, myCategoryCount = 0 }) {
   const owner = isOwner(profile.role)
@@ -49,6 +44,7 @@ export default function Finance({ profile, myCategoryCount = 0 }) {
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [tab, setTab] = useState('operations')
 
   const catMap = useMemo(() => {
     const m = {}
@@ -72,9 +68,22 @@ export default function Finance({ profile, myCategoryCount = 0 }) {
   }
 
   useEffect(() => {
-    refresh()
+    // Filet de sécurité : si le cron quotidien n'a pas tourné, les échéances
+    // dues sont générées ici avant d'afficher le grand livre. Idempotent.
+    const boot = async () => {
+      if (owner) {
+        try {
+          await syncSubscriptionCharges()
+        } catch (e) {
+          console.warn('[subscriptions] sync ignorée', e)
+        }
+      }
+      await refresh()
+    }
+    boot()
     const sub = subscribeRealtime(['finances', 'categories', 'profile_categories'], refresh)
     return () => sub.unsubscribe()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const totals = useMemo(() => {
@@ -161,7 +170,7 @@ export default function Finance({ profile, myCategoryCount = 0 }) {
             {owner ? 'Visible uniquement par toi.' : 'Finances de tes catégories · lecture seule.'}
           </p>
         </div>
-        {owner && (
+        {owner && tab === 'operations' && (
           <button onClick={() => setShowForm(true)} className="btn-primary">
             <Plus className="w-4 h-4" />
             Ajouter
@@ -169,6 +178,36 @@ export default function Finance({ profile, myCategoryCount = 0 }) {
         )}
       </div>
 
+      {/* Opérations ponctuelles / dépenses récurrentes */}
+      <div className="flex gap-1 p-1 rounded-xl bg-ink-900/60 border border-fg/10">
+        {[
+          ['operations', 'Opérations', Wallet],
+          ['subscriptions', 'Abonnements', Repeat],
+        ].map(([key, tabLabel, Icon]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            aria-pressed={tab === key}
+            className={classNames(
+              'flex-1 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1.5',
+              tab === key ? 'bg-fg/10 text-fg' : 'text-ink-400 hover:text-ink-200',
+            )}
+          >
+            <Icon className="w-4 h-4" />
+            {tabLabel}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'subscriptions' ? (
+        <SubscriptionsPanel
+          profile={profile}
+          categories={categories}
+          canEdit={owner}
+          onLedgerChange={refresh}
+        />
+      ) : (
+      <>
       {/* Stat cards */}
       <div className="grid grid-cols-3 gap-2.5 lg:gap-4">
         <StatCard label="Entrées" value={totals.inSum} icon={TrendingUp} tone="emerald" />
@@ -304,6 +343,9 @@ export default function Finance({ profile, myCategoryCount = 0 }) {
             </ul>
           </div>
         </>
+      )}
+
+      </>
       )}
 
       <AnimatePresence>
