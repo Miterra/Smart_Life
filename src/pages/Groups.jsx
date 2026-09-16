@@ -1638,15 +1638,15 @@ function Modal({ children, onClose, title }) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={onClose}
-      className="fixed inset-0 z-50 bg-ink-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="modal-overlay"
     >
       <motion.div
-        initial={{ y: 40, opacity: 0 }}
+        initial={{ y: -40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 40, opacity: 0 }}
+        exit={{ y: -40, opacity: 0 }}
         transition={{ type: 'spring', damping: 24 }}
         onClick={(e) => e.stopPropagation()}
-        className="glass-strong rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-5 pb-safe border border-fg/10 relative"
+        className="modal-sheet relative"
       >
         <button onClick={onClose} className="absolute top-3 right-3 btn-ghost p-1.5">
           <X className="w-4 h-4" />

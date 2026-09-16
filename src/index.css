@@ -106,6 +106,26 @@ button {
   .chip {
     @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide uppercase;
   }
+  /* ---------- Modales / feuilles ----------
+   * Ancrées EN HAUT sur mobile : le clavier iOS occupe le bas de l'écran et
+   * ne redimensionne pas le viewport de mise en page, donc une feuille
+   * ancrée en bas se retrouve masquée dès qu'un champ prend le focus.
+   * Centrées à partir de sm (le clavier n'est plus un problème sur desktop).
+   * Toujours scrollables : le bas d'un formulaire long reste atteignable
+   * même clavier ouvert. */
+  .modal-overlay {
+    @apply fixed inset-0 z-50 bg-ink-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-0 sm:p-4;
+  }
+  .modal-sheet {
+    @apply glass-strong rounded-b-3xl sm:rounded-2xl w-full sm:max-w-md overflow-y-auto border border-fg/10;
+    max-height: 88vh;
+    max-height: 88dvh; /* tient compte des barres mobiles quand c'est supporté */
+    padding: 1.25rem;
+    /* Dégage l'encoche en haut et l'indicateur d'accueil en bas, sans jamais
+       descendre sous le padding visuel. */
+    padding-top: max(1.25rem, env(safe-area-inset-top));
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+  }
   .nav-tab {
     @apply flex-1 flex flex-col items-center justify-center gap-1 py-2 text-[10px] font-semibold uppercase tracking-wider text-ink-400 transition-colors;
   }
