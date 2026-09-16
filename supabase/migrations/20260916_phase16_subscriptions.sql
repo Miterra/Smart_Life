@@ -208,6 +208,14 @@ begin
 end;
 $$;
 
+-- Exposée aux seuls utilisateurs connectés. PostgreSQL accorde EXECUTE à
+-- PUBLIC sur toute nouvelle fonction et `anon` en hérite : révoquer sur
+-- `anon` seul ne suffirait pas, il faut retirer le droit implicite de PUBLIC
+-- puis le redonner explicitement. Un visiteur non connecté n'a pas à
+-- déclencher une fonction qui écrit dans le grand livre.
+revoke execute on function public.sync_subscription_charges() from public, anon;
+grant execute on function public.sync_subscription_charges() to authenticated, service_role;
+
 -- ---------- Realtime ----------
 do $$
 begin
