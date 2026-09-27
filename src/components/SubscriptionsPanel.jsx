@@ -1,8 +1,8 @@
 /* ============================================================
- *  Abonnements (dépenses récurrentes) — CRUD complet.
+ *  Abonnements (revenus et dépenses récurrents) — CRUD complet.
  *
  *  Le panneau ne calcule aucun total financier : à chaque échéance, une
- *  vraie dépense est écrite dans le grand livre (public.finances) par le
+ *  opération est écrite dans le grand livre (public.finances) par le
  *  cron quotidien ou par syncSubscriptionCharges(). Les totaux, graphiques
  *  et le scoping admin de l'onglet Finance restent donc la seule source de
  *  vérité. Ici on n'affiche qu'une projection (coût mensuel/annuel).
@@ -117,7 +117,7 @@ export default function SubscriptionsPanel({ profile, categories, canEdit, onLed
   }
 
   const remove = async (sub) => {
-    if (!confirm(`Supprimer l'abonnement « ${sub.label} » ?\n\nLes dépenses déjà enregistrées sont conservées.`)) return
+    if (!confirm(`Supprimer l'abonnement « ${sub.label} » ?\n\nLes opérations déjà enregistrées sont conservées.`)) return
     setSubs((cur) => cur.filter((s) => s.id !== sub.id)) // optimiste
     try {
       await deleteSubscription(sub.id)
@@ -143,11 +143,15 @@ export default function SubscriptionsPanel({ profile, categories, canEdit, onLed
   return (
     <div className="space-y-4">
       {/* Projection de coût */}
-      <div className="grid grid-cols-3 gap-2.5 lg:gap-4">
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 lg:gap-4">
         <MiniStat label="Actifs" value={String(totals.activeCount)} />
-        <MiniStat label="Par mois" value={formatEur(totals.monthly, { cents: true })} tone="rose" />
-        <MiniStat label="Par an" value={formatEur(totals.yearly)} tone="rose" />
+        <MiniStat label="Revenus / mois" value={formatEur(totals.incomeMonthly, { cents: true })} tone="green" />
+        <MiniStat label="Dépenses / mois" value={formatEur(totals.expenseMonthly, { cents: true })} tone="rose" />
+        <MiniStat label="Revenus / an" value={formatEur(totals.incomeYearly, { cents: true })} tone="green" />
+        <MiniStat label="Dépenses / an" value={formatEur(totals.expenseYearly, { cents: true })} tone="rose" />
+        <MiniStat label="Solde net / mois" value={formatEur(totals.netMonthly, { cents: true })} tone={totals.netMonthly < 0 ? 'rose' : 'green'} />
       </div>
+      <p className="text-xs text-ink-400">Projection des abonnements actifs, hors abonnements en pause.</p>
 
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] uppercase tracking-widest text-ink-400 flex items-center gap-1.5">
@@ -178,7 +182,7 @@ export default function SubscriptionsPanel({ profile, categories, canEdit, onLed
           <Repeat className="w-10 h-10 text-ink-500 mx-auto mb-3" />
           <p className="text-sm text-ink-300 mb-3">
             {canEdit
-              ? 'Aucun abonnement. Ajoute tes dépenses récurrentes : elles seront enregistrées automatiquement à chaque échéance.'
+              ? 'Ajoute tes dépenses récurrentes ou les abonnements de tes clients : chaque échéance sera enregistrée automatiquement dans Finance.'
               : 'Aucun abonnement dans tes catégories.'}
           </p>
           {canEdit && (
@@ -224,7 +228,7 @@ function MiniStat({ label, value, tone }) {
       <p
         className={classNames(
           'font-display font-bold text-base leading-tight',
-          tone === 'rose' ? 'text-rose-300' : 'text-neon-cyan',
+          tone === 'rose' ? 'text-rose-300' : tone === 'green' ? 'text-emerald-400' : 'text-neon-cyan',
         )}
       >
         {value}
@@ -235,6 +239,7 @@ function MiniStat({ label, value, tone }) {
 
 function SubscriptionRow({ sub, canEdit, onEdit, onToggle, onDelete }) {
   const paused = !sub.active
+  const income = sub.direction === 'in'
   return (
     <motion.li
       layout
@@ -244,19 +249,22 @@ function SubscriptionRow({ sub, canEdit, onEdit, onToggle, onDelete }) {
       className={classNames('card p-3.5', paused && 'opacity-60')}
     >
       <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-xl bg-rose-500/15 flex items-center justify-center flex-shrink-0">
-          <Repeat className="w-4 h-4 text-rose-300" />
+        <div className={classNames('w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0', income ? 'bg-emerald-500/15' : 'bg-rose-500/15')}>
+          <Repeat className={classNames('w-4 h-4', income ? 'text-emerald-400' : 'text-rose-300')} />
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <p className="text-sm font-medium text-fg break-words">{sub.label}</p>
-            <span className="text-sm font-semibold text-rose-300 flex-shrink-0">
-              −{formatEur(sub.amount, { cents: true })}
+            <span className={classNames('text-sm font-semibold flex-shrink-0', income ? 'text-emerald-400' : 'text-rose-300')}>
+              {income ? '+' : '−'}{formatEur(sub.amount, { cents: true })}
             </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            <span className={classNames('chip border', income ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-300 border-rose-500/30')}>
+              {income ? 'Revenu client' : 'Dépense'}
+            </span>
             <span className="chip border bg-fg/5 border-fg/10 text-ink-300">
               {INTERVAL_LABELS[sub.billing_interval]}
             </span>
@@ -308,6 +316,7 @@ function SubscriptionForm({ initial, profile, categories, onClose, onSaved }) {
   const isEdit = !!initial
   const [label, setLabel] = useState(initial?.label || '')
   const [amount, setAmount] = useState(initial ? String(initial.amount) : '')
+  const [direction, setDirection] = useState(initial?.direction || 'out')
   const [billingInterval, setBillingInterval] = useState(
     initial?.billing_interval || BILLING_INTERVAL.MONTHLY,
   )
@@ -339,6 +348,7 @@ function SubscriptionForm({ initial, profile, categories, onClose, onSaved }) {
       const cat = categories.find((c) => c.id === categoryId)
       const common = {
         label: label.trim(),
+        direction,
         amount: amt,
         billing_interval: billingInterval,
         category_id: categoryId || null,
@@ -395,6 +405,26 @@ function SubscriptionForm({ initial, profile, categories, onClose, onSaved }) {
           </button>
         </div>
 
+        <fieldset className="mb-3">
+          <legend className="text-xs text-ink-300 mb-2">Type d’abonnement</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {[['out', 'Dépense'], ['in', 'Revenu client']].map(([value, title]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setDirection(value)}
+                aria-pressed={direction === value}
+                className={classNames('btn border', direction === value
+                  ? value === 'in' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                  : 'bg-fg/5 text-ink-300 border-fg/10')}
+              >{title}</button>
+            ))}
+          </div>
+        </fieldset>
+        {isEdit && direction !== (initial.direction || 'out') && (
+          <p className="text-xs text-neon-amber mb-3">Le changement s’applique aux prochaines opérations générées. L’historique est conservé.</p>
+        )}
+
         {/* Périodicité */}
         <div className="grid grid-cols-2 gap-2 mb-3">
           {INTERVAL_OPTIONS.map((opt) => (
@@ -419,7 +449,8 @@ function SubscriptionForm({ initial, profile, categories, onClose, onSaved }) {
           <input
             autoFocus
             type="text"
-            placeholder="Libellé (ex. Netflix, Assurance…)"
+            placeholder={direction === 'in' ? 'Client / prestation (ex. Client Dupont — maintenance)' : 'Libellé (ex. Netflix, Assurance…)'}
+            aria-label="Libellé de l’abonnement"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             required
@@ -476,14 +507,13 @@ function SubscriptionForm({ initial, profile, categories, onClose, onSaved }) {
 
           {backfill > 0 && (
             <p className="text-[11px] text-neon-amber leading-relaxed">
-              Échéance passée : {backfill} dépense{backfill > 1 ? 's' : ''} ser
-              {backfill > 1 ? 'ont' : 'a'} enregistrée{backfill > 1 ? 's' : ''} immédiatement dans le
-              grand livre.
+              {backfill} opération{backfill > 1 ? 's' : ''} de {direction === 'in' ? 'revenu' : 'dépense'}
+              {' '}{backfill > 1 ? 'seront comptabilisées' : 'sera comptabilisée'} immédiatement dans Finance.
             </p>
           )}
           {!isEdit && backfill === 0 && (
             <p className="text-[11px] text-ink-500 leading-relaxed">
-              La dépense sera enregistrée automatiquement à chaque échéance.
+              {direction === 'in' ? 'Le revenu sera enregistré' : 'La dépense sera enregistrée'} automatiquement à chaque échéance.
             </p>
           )}
           {dateChanged && (

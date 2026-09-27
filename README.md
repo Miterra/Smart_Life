@@ -260,3 +260,17 @@ MIT. Fork, modifie, déploie pour ton équipe — c'est fait pour ça.
 ## 🙏 Crédits
 
 Stack : React + Vite + Tailwind + Supabase + Web Push natif (VAPID). Pas de Firebase, pas de FCM, pas de tracker.
+# Abonnements clients et dépenses récurrentes
+
+Dans Finance → Abonnements, choisir « Dépense » ou « Revenu client » à la
+création ou à la modification. Le libellé peut identifier le client et la
+prestation. Les échéances mensuelles ou annuelles génèrent automatiquement
+des sorties ou des entrées dans Finance ; cela ne déclenche aucun prélèvement
+ni paiement réel.
+
+Les projections distinguent revenus, dépenses et solde mensuel, en excluant
+les abonnements en pause. Un changement de type ne modifie pas les opérations
+déjà enregistrées. Les droits par rôle et catégorie restent identiques.
+
+La migration `20260927203120_subscription_income.sql` doit être appliquée
+avant de déployer cette interface. Les abonnements existants restent des dépenses.

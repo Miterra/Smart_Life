@@ -1,5 +1,5 @@
 /* ============================================================
- *  Domaine « abonnements » (dépenses récurrentes)
+ *  Domaine « abonnements » (revenus et dépenses récurrents)
  *
  *  Module pur : aucune dépendance réseau, aucun état. Les requêtes
  *  vivent dans repository.js, l'affichage dans SubscriptionsPanel.jsx.
@@ -17,6 +17,7 @@
  * @property {string}          id
  * @property {string}          label            Libellé affiché et repris sur la dépense générée.
  * @property {number}          amount           Montant en euros, strictement positif.
+ * @property {'in'|'out'}      direction        Revenu client ou dépense.
  * @property {BillingInterval} billing_interval Périodicité.
  * @property {string|null}     category_id      Catégorie (uuid) — pilote le scoping admin.
  * @property {string|null}     category         Nom de catégorie dénormalisé (affichage).
@@ -156,14 +157,25 @@ function roundCents(value) {
  * Valeurs exactes au centime — c'est une projection d'affichage, les montants
  * réellement comptabilisés viennent du grand livre (numeric(12,2)).
  * @param {Subscription[]} subs
- * @returns {{ activeCount: number, monthly: number, yearly: number }}
+ * @returns {{ activeCount: number, incomeMonthly: number, incomeYearly: number, expenseMonthly: number, expenseYearly: number, netMonthly: number, netYearly: number }}
  */
 export function summarize(subs) {
   const active = (subs || []).filter((s) => s.active)
   // On arrondit chaque total à partir du cumul BRUT : arrondir le mensuel puis
   // le multiplier par 12 propagerait l'erreur d'arrondi (219,84 vs 219,88).
-  const raw = active.reduce((sum, s) => sum + monthlyEquivalent(s), 0)
-  return { activeCount: active.length, monthly: roundCents(raw), yearly: roundCents(raw * 12) }
+  const income = active.filter((sub) => sub.direction === 'in')
+    .reduce((sum, sub) => sum + monthlyEquivalent(sub), 0)
+  const expenses = active.filter((sub) => sub.direction !== 'in')
+    .reduce((sum, sub) => sum + monthlyEquivalent(sub), 0)
+  return {
+    activeCount: active.length,
+    incomeMonthly: roundCents(income),
+    incomeYearly: roundCents(income * 12),
+    expenseMonthly: roundCents(expenses),
+    expenseYearly: roundCents(expenses * 12),
+    netMonthly: roundCents(income - expenses),
+    netYearly: roundCents((income - expenses) * 12),
+  }
 }
 
 /* ---------- Robustesse ---------- */
